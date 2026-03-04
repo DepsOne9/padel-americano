@@ -324,8 +324,9 @@ function closeProfile(){if(profileBackTarget==='account'){renderAccountScreen();
 function renderHomeAcct(){
   const el=document.getElementById('home-acct-area');
   if(currentUser){
+    const avatarContent=currentUser.avatar?`<img src="${currentUser.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:currentUser.username[0].toUpperCase();
     el.innerHTML=`<div class="acct-chip" onclick="goAccount()">
-      <div class="acct-avatar-sm">${currentUser.username[0].toUpperCase()}</div>
+      <div class="acct-avatar-sm" style="overflow:hidden;">${avatarContent}</div>
       <div style="flex:1;"><div style="font-size:14px;font-weight:700;">${currentUser.username}</div><div style="font-size:11px;color:var(--muted);">View profile & global stats →</div></div>
       <div style="color:var(--muted);font-size:18px;">›</div>
     </div>`;
@@ -346,12 +347,12 @@ function renderAccountScreen(){
   const el=document.getElementById('acct-body');
   if(currentUser){
     el.innerHTML=`
-      <div style="display:flex;background:var(--surface);border-bottom:1px solid var(--border);margin-bottom:0;">
-        <button class="lb-tab on" id="atab-me" onclick="switchAcctTab('me')" style="flex:1;text-align:center;">👤 My Profile</button>
-        <button class="lb-tab" id="atab-global" onclick="switchAcctTab('global')" style="flex:1;text-align:center;">🌍 Global Ranking</button>
+      <div class="tab-bar" style="position:relative;transform:none;left:auto;bottom:auto;border-top:none;border-bottom:1px solid var(--border);margin-bottom:0;">
+        <button class="tab-btn active" id="atab-me" onclick="switchAcctTab('me')"><span class="tab-icon">👤</span>My Profile</button>
+        <button class="tab-btn" id="atab-global" onclick="switchAcctTab('global')"><span class="tab-icon">🌍</span>Global Ranking</button>
       </div>
-      <div id="acct-pane-me" style="padding:16px 0 90px;"></div>
-      <div id="acct-pane-global" style="padding:16px 0 90px;display:none;"></div>`;
+      <div id="acct-pane-me" style="padding:0 0 90px;"></div>
+      <div id="acct-pane-global" style="padding:0 0 90px;display:none;"></div>`;
     renderAcctMe();
   } else {
     el.innerHTML=`
@@ -427,23 +428,126 @@ function switchAcctTab(tab){
   ['me','global'].forEach(t=>{
     const pane=document.getElementById(`acct-pane-${t}`);const btn=document.getElementById(`atab-${t}`);
     if(pane)pane.style.display=t===tab?'block':'none';
-    if(btn)btn.classList.toggle('on',t===tab);
+    if(btn)btn.classList.toggle('active',t===tab);
   });
   if(tab==='global')renderGlobalRanking();
 }
 
 function renderAcctMe(){
   const el=document.getElementById('acct-pane-me');if(!el)return;
+  const u=currentUser;
+  const avatarSrc=u.avatar?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:u.username[0].toUpperCase();
+
+  // username change cooldown
+  const lastChange=u.lastUsernameChange?new Date(u.lastUsernameChange):null;
+  const now=new Date();
+  const daysSince=lastChange?Math.floor((now-lastChange)/(1000*60*60*24)):999;
+  const canChange=daysSince>=14;
+  const daysLeft=14-daysSince;
+
   el.innerHTML=`
-    <div style="text-align:center;padding:10px 16px 20px;">
-      <div style="width:72px;height:72px;border-radius:50%;background:rgba(0,229,160,0.1);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:36px;color:var(--accent);margin:0 auto 10px;">${currentUser.username[0].toUpperCase()}</div>
-      <div style="font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:2px;">${currentUser.username}</div>
-      <div style="font-size:12px;color:var(--muted);">Member since ${fmtDate(currentUser.joinedAt)}</div>
+    <div style="text-align:center;padding:20px 16px 16px;">
+      <!-- avatar -->
+      <div style="position:relative;width:82px;margin:0 auto 12px;">
+        <div id="avatar-display" style="width:82px;height:82px;border-radius:50%;background:rgba(0,229,160,0.1);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:38px;color:var(--accent);overflow:hidden;">${avatarSrc}</div>
+        <label for="avatar-upload" style="position:absolute;bottom:0;right:0;width:26px;height:26px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:2px solid var(--bg);" title="Change photo">📷</label>
+        <input type="file" id="avatar-upload" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)"/>
+      </div>
+      <!-- username -->
+      <div id="username-display">
+        <div style="font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:2px;">${u.username}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">Member since ${fmtDate(u.joinedAt)}</div>
+        ${canChange
+          ?`<button onclick="showUsernameEdit()" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:50px;font-size:12px;font-weight:600;cursor:pointer;">✏️ Change username</button>`
+          :`<div style="margin-top:8px;font-size:11px;color:var(--muted);">Username change available in <strong style="color:var(--accent3);">${daysLeft} day${daysLeft!==1?'s':''}</strong></div>`
+        }
+      </div>
+      <div id="username-edit" style="display:none;margin-top:10px;">
+        <div style="position:relative;margin-bottom:8px;">
+          <input id="new-username-inp" type="text" placeholder="new username" autocapitalize="none"
+            style="width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;color:var(--text);font-size:15px;outline:none;text-align:center;"/>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="doUsernameChange()">Save</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="hideUsernameEdit()">Cancel</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">After changing, you can change again in 14 days</div>
+      </div>
     </div>
     <div style="padding:0 16px;">
       <button class="btn btn-primary" style="margin-bottom:10px;" onclick="viewMyProfile()">📊 View Full Profile & History</button>
       <button class="btn btn-danger" onclick="doLogout()">Sign Out</button>
     </div>`;
+}
+
+function showUsernameEdit(){
+  document.getElementById('username-display').style.display='none';
+  document.getElementById('username-edit').style.display='block';
+  const inp=document.getElementById('new-username-inp');
+  if(inp){inp.value=currentUser.username;inp.focus();inp.select();}
+}
+function hideUsernameEdit(){
+  document.getElementById('username-edit').style.display='none';
+  document.getElementById('username-display').style.display='block';
+}
+
+async function doUsernameChange(){
+  const newName=document.getElementById('new-username-inp').value.trim().toLowerCase().replace(/\s+/g,'_');
+  if(!newName){toast('Enter a username',true);return;}
+  if(!/^[a-z0-9_]+$/.test(newName)){toast('Letters, numbers, _ only',true);return;}
+  if(newName===currentUser.username){hideUsernameEdit();return;}
+  const btn=document.querySelector('#username-edit .btn-primary');
+  btn.textContent='Saving…';btn.disabled=true;
+  // check not taken
+  const existing=await fbLoadP(newName);
+  if(existing){btn.textContent='Save';btn.disabled=false;toast('Username already taken',true);return;}
+  // save new, delete old key by setting new entry, mark old as redirecting
+  const oldUsername=currentUser.username;
+  const updated={...currentUser,username:newName,lastUsernameChange:new Date().toISOString()};
+  await window._fbSet(`players/${newName}`,updated);
+  // leave a redirect stub so old tournament refs still resolve
+  await window._fbSet(`players/${oldUsername}`,{redirectTo:newName,username:oldUsername});
+  saveSess(updated);
+  btn.textContent='Save';btn.disabled=false;
+  renderAcctMe();renderHomeAcct();
+  toast(`Username changed to ${newName} ✓`);
+}
+
+function handleAvatarUpload(e){
+  const file=e.target.files[0];if(!file)return;
+  // validate size — max 200KB original, we compress to ~80x80px JPEG
+  const MAX_BYTES=500*1024;
+  if(file.size>MAX_BYTES*5){toast('Image too large (max ~2MB)',true);return;}
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      // compress to 80×80px — small enough for 50 players stored in Firebase
+      const canvas=document.createElement('canvas');
+      canvas.width=80;canvas.height=80;
+      const ctx=canvas.getContext('2d');
+      // centre-crop
+      const size=Math.min(img.width,img.height);
+      const sx=(img.width-size)/2,sy=(img.height-size)/2;
+      ctx.drawImage(img,sx,sy,size,size,0,0,80,80);
+      const dataUrl=canvas.toDataURL('image/jpeg',0.82);
+      saveAvatar(dataUrl);
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveAvatar(dataUrl){
+  const updated={...currentUser,avatar:dataUrl};
+  const ok=await fbSaveP(updated);
+  if(!ok)return;
+  saveSess(updated);
+  // update display
+  const disp=document.getElementById('avatar-display');
+  if(disp)disp.innerHTML=`<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`;
+  renderHomeAcct();
+  toast('Profile photo updated ✓');
 }
 
 async function renderGlobalRanking(){
@@ -477,8 +581,10 @@ async function renderGlobalRanking(){
     const pct=Math.round(p.pts/maxPts*100);
     const isMe=currentUser&&currentUser.username===p.username;
     const medal=medals[i]||(i+1);
+    const avatarInner=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`<span style="font-family:'Bebas Neue',cursive;font-size:15px;color:var(--accent);">${p.username[0].toUpperCase()}</span>`;
     html+=`<div onclick="viewGlobalProfile('${p.username}')" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:8px;cursor:pointer;">
-      <div style="font-family:'Bebas Neue',cursive;font-size:${i<3?'22':'18'}px;min-width:28px;text-align:center;color:${i===0?'var(--accent3)':i===1?'#aaa':i===2?'#cd7f32':'var(--muted)'};">${medal}</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:${i<3?'22':'18'}px;min-width:26px;text-align:center;color:${i===0?'var(--accent3)':i===1?'#aaa':i===2?'#cd7f32':'var(--muted)'};">${medal}</div>
+      <div style="width:34px;height:34px;border-radius:50%;background:rgba(0,229,160,0.08);border:2px solid ${isMe?'var(--accent)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">${avatarInner}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;">${p.username}${isMe?`<span style="font-size:10px;background:var(--accent);color:var(--bg);padding:2px 6px;border-radius:4px;font-weight:700;">YOU</span>`:''}</div>
         <div style="height:5px;background:var(--border);border-radius:3px;margin-top:5px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${i<3?'var(--accent)':'var(--muted)'};border-radius:3px;"></div></div>
@@ -536,9 +642,10 @@ async function openProfileScreen(username){
     histHTML=`<div class="empty"><div class="ei">🎾</div>No tournaments recorded yet</div>`;
   }
 
+  const avatarContent=player.avatar?`<img src="${player.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:player.username[0].toUpperCase();
   document.getElementById('profile-body').innerHTML=`
     <div style="background:linear-gradient(180deg,var(--surface),transparent);padding:20px 20px 16px;text-align:center;">
-      <div class="profile-avatar-big">${player.username[0].toUpperCase()}</div>
+      <div class="profile-avatar-big" style="overflow:hidden;">${avatarContent}</div>
       <div class="profile-name-big">${player.username}</div>
       <div class="profile-joined">Member since ${fmtDate(player.joinedAt)}${player.legacy_points?` · +${player.legacy_points} legacy pts`:''}</div>
     </div>
