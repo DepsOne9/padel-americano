@@ -625,21 +625,67 @@ async function openProfileScreen(username){
 
   let histHTML='';
   if(history.length){
-    [...history].reverse().forEach(th=>{
+    const sorted=[...history].reverse();
+    sorted.forEach((th,idx)=>{
       let dots='';
       if(th.roundScores&&th.roundScores.length){
-        th.roundScores.forEach((sc,i)=>{const c=roundColor(sc,th.ppg||24);dots+=`<div class="round-dot" style="background:${c.bg};color:${c.color};flex:1;"><span class="rn">${i+1}</span>${sc===0?'B':sc}</div>`;});
+        th.roundScores.forEach((sc,i)=>{
+          const c=roundColor(sc,th.ppg||24);
+          dots+=`<div class="round-dot" style="background:${c.bg};color:${c.color};flex:1;"><span class="rn">${i+1}</span>${sc===0?'BYE':sc}</div>`;
+        });
       }
-      histHTML+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div style="font-weight:700;font-size:14px;">${th.name||'Tournament'}</div>
-        <div style="font-family:'Bebas Neue',cursive;font-size:22px;color:var(--accent);">${th.points} pts</div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:${dots?'8px':'0'};">${fmtDate(th.date)} · ${th.wins}W ${th.losses}L · Rank #${th.rank||'?'}</div>
-      ${dots?`<div style="display:flex;gap:4px;">${dots}</div>`:''}
-      </div>`;
+      const rankStr=th.rank?`#${th.rank} of ${th.totalPlayers||'?'}`:'?';
+      const rankColor=th.rank===1?'var(--accent3)':th.rank===2?'#aaa':th.rank===3?'#cd7f32':'var(--muted)';
+      const rankMedal=th.rank===1?'🥇':th.rank===2?'🥈':th.rank===3?'🥉':'';
+      histHTML+=`
+        <div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="toggleHistEntry(${idx})">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${th.name||'Tournament'}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">${fmtDate(th.date)} · ${th.ppg||24}pts/game</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:26px;color:var(--accent);line-height:1;">${th.points}</div>
+              <div style="font-size:10px;color:var(--muted);">pts</div>
+            </div>
+            <div style="font-size:18px;flex-shrink:0;color:var(--muted);transition:transform 0.2s;" id="hist-chevron-${idx}">›</div>
+          </div>
+          <!-- collapsed summary -->
+          <div style="display:flex;gap:10px;margin-top:10px;">
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:${rankColor};">${rankMedal||rankStr}</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Rank</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:var(--accent);">${th.wins}W</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Wins</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:var(--accent2);">${th.losses}L</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Losses</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;">${th.played}</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Matches</div>
+            </div>
+          </div>
+          <!-- expandable round breakdown -->
+          <div id="hist-detail-${idx}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+            ${dots?`<div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Round Scores</div>
+            <div style="display:flex;gap:4px;margin-bottom:6px;">${dots}</div>`:''}
+            <div style="font-size:12px;color:var(--muted);">
+              Win rate: <strong style="color:var(--text);">${th.played?Math.round(th.wins/(th.wins+th.losses||1)*100):0}%</strong>
+              &nbsp;·&nbsp; Avg/match: <strong style="color:var(--text);">${th.played?(th.points/th.played).toFixed(1):0}</strong>
+              &nbsp;·&nbsp; Code: <strong style="color:var(--accent);letter-spacing:2px;">${th.code||'—'}</strong>
+            </div>
+          </div>
+        </div>`;
     });
+    if(history.length>=10){
+      histHTML+=`<div style="text-align:center;font-size:12px;color:var(--muted);padding:6px 0 4px;">Showing last 10 tournaments</div>`;
+    }
   } else {
-    histHTML=`<div class="empty"><div class="ei">🎾</div>No tournaments recorded yet</div>`;
+    histHTML=`<div class="empty"><div class="ei">🎾</div>No tournaments recorded yet.<br><span style="font-size:12px;">Finish a tournament to see it here!</span></div>`;
   }
 
   const avatarContent=player.avatar?`<img src="${player.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:player.username[0].toUpperCase();
@@ -866,9 +912,57 @@ async function saveScore(ri,mi){
   const sA=elA?(parseInt(elA.value)||0):(m.scoreA||0),sB=elB?(parseInt(elB.value)||0):(m.scoreB||0);
   if(sA+sB>ppg){toast(`Total can't exceed ${ppg} pts`,true);return;}
   m.scoreA=sA;m.scoreB=sB;m.saved=true;
-  await fbSaveT(T);renderRounds();renderTopBar();toast('Score saved! 🎾');
+  await fbSaveT(T);
+  renderRounds();renderTopBar();toast('Score saved! 🎾');
+  // check if tournament is now fully complete
+  const totalM=T.rounds.reduce((a,r)=>a+r.matches.length,0);
+  const savedM=T.rounds.reduce((a,r)=>a+r.matches.filter(m=>m.saved).length,0);
+  if(savedM===totalM) await commitTournamentToProfiles();
 }
 async function editScore(ri,mi){T.rounds[ri].matches[mi].saved=false;await fbSaveT(T);renderRounds();renderTopBar();}
+
+// ═══════════════════════════════════
+//  COMMIT TOURNAMENT RESULTS TO PLAYER PROFILES
+// ═══════════════════════════════════
+async function commitTournamentToProfiles(){
+  const standings=computeStandings();
+  for(const st of standings){
+    // try to find a player account — match by username (lowercase, spaces→_)
+    const guessedUsername=st.name.toLowerCase().replace(/\s+/g,'_');
+    let player=await fbLoadP(guessedUsername);
+    // also handle redirect stubs
+    if(player&&player.redirectTo) player=await fbLoadP(player.redirectTo);
+    if(!player) continue; // no account linked, skip
+
+    const existing=player.tournaments||[];
+    // don't double-add same tournament
+    if(existing.some(t=>t.code===T.code)) continue;
+
+    const entry={
+      code:T.code,
+      name:T.name,
+      date:new Date().toISOString(),
+      points:st.points,
+      wins:st.wins,
+      losses:st.losses,
+      played:st.played,
+      rank:standings.indexOf(st)+1,
+      totalPlayers:standings.length,
+      roundScores:st.roundScores||[],
+      ppg:T.pointsPerGame
+    };
+
+    // keep last 10 only — oldest first so we slice from start
+    const updated=[...existing,entry];
+    if(updated.length>10) updated.splice(0,updated.length-10);
+
+    await fbSaveP({...player,tournaments:updated});
+    // refresh session if this is the logged-in user
+    if(currentUser&&currentUser.username===player.username){
+      saveSess({...currentUser,tournaments:updated});
+    }
+  }
+}
 
 // ═══════════════════════════════════
 //  STANDINGS
@@ -1045,6 +1139,18 @@ function renderPartners(){
       ${notYet.length?`<div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:8px 0 4px;">Scheduled with</div><div class="tags-wrap">${notYet.map(q=>`<span class="ptag-sched">${q}</span>`).join('')}</div>`:''}
     </div>`;
   });
+}
+
+// ═══════════════════════════════════
+//  TOURNAMENT HISTORY TOGGLE
+// ═══════════════════════════════════
+function toggleHistEntry(idx){
+  const detail=document.getElementById(`hist-detail-${idx}`);
+  const chevron=document.getElementById(`hist-chevron-${idx}`);
+  if(!detail)return;
+  const open=detail.style.display==='block';
+  detail.style.display=open?'none':'block';
+  if(chevron)chevron.style.transform=open?'':'rotate(90deg)';
 }
 
 // ═══════════════════════════════════
