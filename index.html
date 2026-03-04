@@ -346,13 +346,13 @@ function renderAccountScreen(){
   const el=document.getElementById('acct-body');
   if(currentUser){
     el.innerHTML=`
-      <div style="text-align:center;padding:10px 0 24px;">
-        <div style="width:72px;height:72px;border-radius:50%;background:rgba(0,229,160,0.1);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:36px;color:var(--accent);margin:0 auto 10px;">${currentUser.username[0].toUpperCase()}</div>
-        <div style="font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:2px;">${currentUser.username}</div>
-        <div style="font-size:12px;color:var(--muted);">Member since ${fmtDate(currentUser.joinedAt)}</div>
+      <div style="display:flex;background:var(--surface);border-bottom:1px solid var(--border);margin-bottom:0;">
+        <button class="lb-tab on" id="atab-me" onclick="switchAcctTab('me')" style="flex:1;text-align:center;">👤 My Profile</button>
+        <button class="lb-tab" id="atab-global" onclick="switchAcctTab('global')" style="flex:1;text-align:center;">🌍 Global Ranking</button>
       </div>
-      <button class="btn btn-primary" style="margin-bottom:10px;" onclick="viewMyProfile()">📊 View My Full Profile</button>
-      <button class="btn btn-danger" onclick="doLogout()">Sign Out</button>`;
+      <div id="acct-pane-me" style="padding:16px 0 90px;"></div>
+      <div id="acct-pane-global" style="padding:16px 0 90px;display:none;"></div>`;
+    renderAcctMe();
   } else {
     el.innerHTML=`
       <div id="acct-tabs" style="display:flex;gap:8px;margin-bottom:20px;">
@@ -368,16 +368,20 @@ function showAuthTab(tab){
   const el=document.getElementById('auth-form');if(!el)return;
   document.getElementById('atab-si').className=`btn btn-sm ${tab==='signin'?'btn-primary':'btn-secondary'}`;
   document.getElementById('atab-reg').className=`btn btn-sm ${tab==='register'?'btn-primary':'btn-secondary'}`;
+  const pwField=`<div class="fg"><label>Password</label><div style="position:relative;">
+    <input id="ap" type="password" placeholder="••••••" style="padding-right:48px;"/>
+    <button type="button" onclick="togglePw()" id="pw-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--muted);padding:0;line-height:1;">👁</button>
+  </div></div>`;
   if(tab==='signin'){
     el.innerHTML=`<div class="card">
       <div class="fg"><label>Username</label><input id="au" type="text" placeholder="your username" autocapitalize="none"/></div>
-      <div class="fg"><label>Password</label><input id="ap" type="password" placeholder="••••••"/></div>
+      ${pwField}
       <button class="btn btn-primary" onclick="doSignIn()">SIGN IN</button>
     </div>`;
   } else {
     el.innerHTML=`<div class="card">
       <div class="fg"><label>Username</label><input id="au" type="text" placeholder="choose a username" autocapitalize="none"/></div>
-      <div class="fg"><label>Password</label><input id="ap" type="password" placeholder="choose a password (min 4 chars)"/></div>
+      ${pwField}
       <div class="fg"><label>Legacy Points (optional)</label>
         <input id="alp" type="number" placeholder="0"/>
         <div style="font-size:11px;color:var(--muted);margin-top:4px;">Points earned in tournaments before using this app</div>
@@ -415,6 +419,83 @@ async function doRegister(){
   await fbSaveP(player);
   saveSess(player);btn.textContent='CREATE ACCOUNT';btn.disabled=false;
   renderAccountScreen();renderHomeAcct();toast(`Welcome, ${username}! 🎾`);
+}
+
+function togglePw(){const inp=document.getElementById('ap');const btn=document.getElementById('pw-eye');if(!inp)return;if(inp.type==='password'){inp.type='text';btn.textContent='🙈';}else{inp.type='password';btn.textContent='👁';}}
+
+function switchAcctTab(tab){
+  ['me','global'].forEach(t=>{
+    const pane=document.getElementById(`acct-pane-${t}`);const btn=document.getElementById(`atab-${t}`);
+    if(pane)pane.style.display=t===tab?'block':'none';
+    if(btn)btn.classList.toggle('on',t===tab);
+  });
+  if(tab==='global')renderGlobalRanking();
+}
+
+function renderAcctMe(){
+  const el=document.getElementById('acct-pane-me');if(!el)return;
+  el.innerHTML=`
+    <div style="text-align:center;padding:10px 16px 20px;">
+      <div style="width:72px;height:72px;border-radius:50%;background:rgba(0,229,160,0.1);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:36px;color:var(--accent);margin:0 auto 10px;">${currentUser.username[0].toUpperCase()}</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:2px;">${currentUser.username}</div>
+      <div style="font-size:12px;color:var(--muted);">Member since ${fmtDate(currentUser.joinedAt)}</div>
+    </div>
+    <div style="padding:0 16px;">
+      <button class="btn btn-primary" style="margin-bottom:10px;" onclick="viewMyProfile()">📊 View Full Profile & History</button>
+      <button class="btn btn-danger" onclick="doLogout()">Sign Out</button>
+    </div>`;
+}
+
+async function renderGlobalRanking(){
+  const el=document.getElementById('acct-pane-global');if(!el)return;
+  el.innerHTML=`<div style="padding:16px;"><div class="spinner"></div></div>`;
+  let allPlayers=[];
+  try{
+    const data=await window._fbGet('players');
+    if(data) allPlayers=Object.values(data);
+  }catch(e){el.innerHTML=`<div class="empty"><div class="ei">⚠️</div>Could not load rankings</div>`;return;}
+
+  if(!allPlayers.length){el.innerHTML=`<div class="empty"><div class="ei">🌍</div>No players registered yet</div>`;return;}
+
+  // compute global score per player
+  const ranked=allPlayers.map(p=>{
+    const history=p.tournaments||[];
+    let pts=p.legacy_points||0,wins=0,losses=0,played=0;
+    history.forEach(th=>{pts+=th.points||0;wins+=th.wins||0;losses+=th.losses||0;played+=th.played||0;});
+    const winRate=played>0?Math.round(wins/(wins+losses||1)*100):0;
+    return{username:p.username,pts,wins,losses,played,winRate,tourneys:history.length};
+  }).sort((a,b)=>b.pts-a.pts||b.wins-a.wins);
+
+  const maxPts=ranked.length&&ranked[0].pts>0?ranked[0].pts:1;
+  const medals=['🥇','🥈','🥉'];
+
+  let html=`<div style="padding:0 16px;">
+    <div class="sec">All-Time Leaderboard</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${ranked.length} registered players · tap to view profile</div>`;
+
+  ranked.forEach((p,i)=>{
+    const pct=Math.round(p.pts/maxPts*100);
+    const isMe=currentUser&&currentUser.username===p.username;
+    const medal=medals[i]||(i+1);
+    html+=`<div onclick="viewGlobalProfile('${p.username}')" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:8px;cursor:pointer;">
+      <div style="font-family:'Bebas Neue',cursive;font-size:${i<3?'22':'18'}px;min-width:28px;text-align:center;color:${i===0?'var(--accent3)':i===1?'#aaa':i===2?'#cd7f32':'var(--muted)'};">${medal}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;">${p.username}${isMe?`<span style="font-size:10px;background:var(--accent);color:var(--bg);padding:2px 6px;border-radius:4px;font-weight:700;">YOU</span>`:''}</div>
+        <div style="height:5px;background:var(--border);border-radius:3px;margin-top:5px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${i<3?'var(--accent)':'var(--muted)'};border-radius:3px;"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:24px;color:${i<3?'var(--accent)':'var(--text)'};line-height:1;">${p.pts}</div>
+        <div style="font-size:10px;color:var(--muted);">${p.wins}W · ${p.losses}L</div>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+async function viewGlobalProfile(username){
+  profileBackTarget='account';
+  await openProfileScreen(username);
 }
 
 function doLogout(){clearSess();renderAccountScreen();renderHomeAcct();toast('Signed out');}
