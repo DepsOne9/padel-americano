@@ -957,15 +957,9 @@ function renderMatch(ri,mi){
         <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
         <div class="score-hint ${over?'over':''}" id="hint-${ri}-${mi}">${over?`⚠ Total ${tot} exceeds ${ppg} max`:`${tot} / ${ppg} pts · ${ppg-tot} left`}</div>
         <div class="score-row">
-          <button class="step-btn" onclick="adj(${ri},${mi},'A',-1)">−</button>
-          <input class="score-inp ${over?'over':''}" type="number" id="sA-${ri}-${mi}" value="${sA}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'A')" onblur="onBlur(${ri},${mi},'A')"/>
+          <input class="score-inp ${over?'over':''}" type="number" id="sA-${ri}-${mi}" placeholder="0" value="${sA||''}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'A')" onblur="onBlur(${ri},${mi},'A')"/>
           <div class="score-dash">–</div>
-          <input class="score-inp ${over?'over':''}" type="number" id="sB-${ri}-${mi}" value="${sB}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'B')" onblur="onBlur(${ri},${mi},'B')"/>
-          <button class="step-btn" onclick="adj(${ri},${mi},'B',-1)">−</button>
-        </div>
-        <div class="plus-row">
-          <button class="plus-btn" onclick="adj(${ri},${mi},'A',1)">+ ${match.teamA[0].split(' ')[0]} & ${match.teamA[1].split(' ')[0]}</button>
-          <button class="plus-btn" onclick="adj(${ri},${mi},'B',1)">+ ${match.teamB[0].split(' ')[0]} & ${match.teamB[1].split(' ')[0]}</button>
+          <input class="score-inp ${over?'over':''}" type="number" id="sB-${ri}-${mi}" placeholder="0" value="${sB||''}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'B')" onblur="onBlur(${ri},${mi},'B')"/>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveScore(${ri},${mi})">SAVE SCORE</button>
@@ -980,13 +974,12 @@ function renderMatch(ri,mi){
 //  SCORE ENTRY OPEN/CLEAR
 // ═══════════════════════════════════
 function openScoreEntry(ri,mi){
-  // set scores to 0 to trigger the entry UI
+  // use a sentinel value — inputs will show placeholder "0" but be visually blank
   T.rounds[ri].matches[mi].scoreA=0;
   T.rounds[ri].matches[mi].scoreB=0;
   renderMatch(ri,mi);
-  // focus first input
   const el=document.getElementById(`sA-${ri}-${mi}`);
-  if(el){el.focus();el.select();}
+  if(el){el.value='';el.focus();}
 }
 function clearScoreEntry(ri,mi){
   // reset back to blank
