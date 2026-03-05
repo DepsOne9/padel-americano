@@ -26,6 +26,7 @@
   window._fbSet    = (path, data) => set(ref(db, path), data);
   window._fbGet    = async (path) => { const s = await get(ref(db, path)); return s.exists() ? s.val() : null; };
   window._fbListen = (path, cb)   => onValue(ref(db, path), s => { if (s.exists()) cb(s.val()); });
+  window._fbListenOnce = (path, cb) => { const {onValue: ov, ref: r} = {onValue, ref}; const unsub=ov(r(db,path),s=>{if(s.exists())cb(s.val());unsub();},{onlyOnce:true}); };
   window._fbReady  = true;
   document.dispatchEvent(new Event('fb-ready'));
 </script>
@@ -165,6 +166,21 @@ input[type=number]{-moz-appearance:textfield;}
 .acct-chip{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:12px;cursor:pointer;}
 .acct-chip:active{opacity:0.8;}
 .acct-avatar-sm{width:34px;height:34px;border-radius:50%;background:rgba(0,229,160,0.1);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:16px;color:var(--accent);flex-shrink:0;}
+
+/* ── TOURNAMENT LIST ── */
+.tlist-card{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px;margin-bottom:9px;cursor:pointer;transition:opacity 0.15s;}
+.tlist-card:active{opacity:0.75;}
+.tlist-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.tlist-icon.active{background:rgba(0,229,160,0.12);}
+.tlist-icon.completed{background:rgba(107,127,163,0.12);}
+.tlist-info{flex:1;min-width:0;}
+.tlist-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tlist-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+.badge-active{display:inline-flex;align-items:center;gap:4px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:var(--accent);padding:3px 9px;border-radius:50px;font-size:10px;font-weight:700;letter-spacing:0.5px;}
+.badge-done{display:inline-flex;align-items:center;gap:4px;background:rgba(107,127,163,0.1);border:1px solid var(--border);color:var(--muted);padding:3px 9px;border-radius:50px;font-size:10px;font-weight:700;letter-spacing:0.5px;}
+.badge-creator{background:rgba(255,209,102,0.1);border:1px solid rgba(255,209,102,0.25);color:var(--accent3);padding:2px 7px;border-radius:50px;font-size:9px;font-weight:700;letter-spacing:0.5px;}
+.enter-score-btn{width:100%;padding:10px;background:rgba(0,229,160,0.07);border:1px dashed rgba(0,229,160,0.25);border-radius:10px;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-align:center;letter-spacing:0.3px;}
+.enter-score-btn:active{background:rgba(0,229,160,0.15);}
 </style>
 </head>
 <body>
@@ -178,18 +194,13 @@ input[type=number]{-moz-appearance:textfield;}
   </div>
   <div class="wrap" style="padding-top:4px;">
     <div id="home-acct-area"></div>
-    <div class="card" style="text-align:center;padding:24px 20px;margin-bottom:12px;">
-      <div style="font-size:36px;margin-bottom:10px;">🎾</div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:5px;">Host a Tournament</div>
-      <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Create a new Americano and share the code</div>
-      <button class="btn btn-primary" onclick="goSetup()">+ NEW TOURNAMENT</button>
+    <!-- action buttons -->
+    <div class="row" style="margin-bottom:12px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="goSetup()">+ New</button>
+      <button class="btn btn-secondary" style="flex:1;" onclick="goJoin()">Join</button>
     </div>
-    <div class="card" style="text-align:center;padding:24px 20px;">
-      <div style="font-size:36px;margin-bottom:10px;">🔗</div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:5px;">Join a Tournament</div>
-      <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Enter the 5-letter code from your host</div>
-      <button class="btn btn-secondary" onclick="goJoin()">JOIN WITH CODE</button>
-    </div>
+    <!-- my tournaments list -->
+    <div id="home-tourn-list"></div>
   </div>
 </div>
 
@@ -295,7 +306,7 @@ let currentUser=null, profileBackTarget='ranking';
 function waitFb(cb){if(window._fbReady){cb();return;}document.addEventListener('fb-ready',cb,{once:true});}
 async function fbSaveT(t){try{await window._fbSet(`tournaments/${t.code}`,t);return true;}catch(e){toast('Save failed',true);return false;}}
 async function fbLoadT(code){try{return await window._fbGet(`tournaments/${code}`);}catch(e){return null;}}
-function fbListenT(code){if(fbUnsub){try{fbUnsub();}catch(e){}}fbUnsub=window._fbListen(`tournaments/${code}`,d=>{T=d;renderTournament();});}
+function fbListenT(code){if(fbUnsub){try{fbUnsub();}catch(e){}}fbUnsub=window._fbListen(`tournaments/${code}`,d=>{T=d;if(T) upsertMyTournament(T, !!(currentUser&&T.createdBy&&currentUser.username===T.createdBy));renderTournament();});}
 async function fbSaveP(p){try{await window._fbSet(`players/${p.username}`,p);return true;}catch(e){toast('Save failed',true);return false;}}
 async function fbLoadP(u){try{return await window._fbGet(`players/${u}`);}catch(e){return null;}}
 
@@ -321,6 +332,21 @@ function closeProfile(){if(profileBackTarget==='account'){renderAccountScreen();
 // ═══════════════════════════════════
 //  HOME ACCOUNT AREA
 // ═══════════════════════════════════
+// stored locally: [{code, name, createdAt, status, isCreator, playerCount, rounds}]
+let myTournaments = [];
+function loadMyTournaments(){ try{ const s=localStorage.getItem('pa_my_tourneys'); if(s) myTournaments=JSON.parse(s); }catch(e){} }
+function saveMyTournaments(){ try{ localStorage.setItem('pa_my_tourneys', JSON.stringify(myTournaments)); }catch(e){} }
+function upsertMyTournament(t, isCreator){
+  const entry={ code:t.code, name:t.name, createdAt:t.createdAt, status:t.status||'active',
+    isCreator:!!isCreator, playerCount:t.players.length, rounds:t.rounds.length };
+  const idx=myTournaments.findIndex(x=>x.code===t.code);
+  if(idx>=0) myTournaments[idx]=entry; else myTournaments.unshift(entry);
+  // keep max 30, newest first
+  if(myTournaments.length>30) myTournaments=myTournaments.slice(0,30);
+  saveMyTournaments();
+}
+loadMyTournaments();
+
 function renderHomeAcct(){
   const el=document.getElementById('home-acct-area');
   if(currentUser){
@@ -337,6 +363,56 @@ function renderHomeAcct(){
       <div style="color:var(--muted);font-size:18px;">›</div>
     </div>`;
   }
+  renderHomeTournList();
+}
+
+function renderHomeTournList(){
+  const el=document.getElementById('home-tourn-list'); if(!el)return;
+  if(!myTournaments.length){
+    el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--muted);font-size:13px;">
+      <div style="font-size:36px;margin-bottom:8px;">🎾</div>
+      Create or join a tournament to get started
+    </div>`;
+    return;
+  }
+  const active=myTournaments.filter(t=>t.status!=='completed');
+  const done=myTournaments.filter(t=>t.status==='completed');
+  let html='';
+  if(active.length){
+    html+=`<div class="sec" style="margin-top:4px;">Active Tournaments</div>`;
+    active.forEach(t=>{ html+=tournCard(t); });
+  }
+  if(done.length){
+    html+=`<div class="sec">Completed</div>`;
+    done.forEach(t=>{ html+=tournCard(t); });
+  }
+  el.innerHTML=html;
+}
+
+function tournCard(t){
+  const isActive=t.status!=='completed';
+  const dateStr=t.createdAt?new Date(t.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
+  return `<div class="tlist-card" onclick="reopenTournament('${t.code}')">
+    <div class="tlist-icon ${isActive?'active':'completed'}">${isActive?'🎾':'✅'}</div>
+    <div class="tlist-info">
+      <div class="tlist-name">${t.name}</div>
+      <div class="tlist-meta">${t.playerCount} players · ${t.rounds} rounds · ${dateStr}</div>
+      <div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">
+        ${isActive?'<span class="badge-active">● Active</span>':'<span class="badge-done">✓ Completed</span>'}
+        ${t.isCreator?'<span class="badge-creator">Creator</span>':''}
+      </div>
+    </div>
+    <div style="color:var(--muted);font-size:20px;">›</div>
+  </div>`;
+}
+
+async function reopenTournament(code){
+  const btn=document.querySelector(`[onclick="reopenTournament('${code}')"]`);
+  if(btn) btn.style.opacity='0.5';
+  const data=await fbLoadT(code);
+  if(btn) btn.style.opacity='1';
+  if(!data){toast('Tournament not found',true);return;}
+  T=data; openTournament();
 }
 renderHomeAcct();
 
@@ -775,7 +851,7 @@ async function createTournament(){
   T={code,name,pointsPerGame:ppg,players,rounds:generateSchedule(players,numRounds),byeOption:players.length%4!==0?byeChoice:null,createdAt:new Date().toISOString()};
   const btn=document.querySelector('#s-setup .btn-primary');btn.textContent='Saving…';btn.disabled=true;
   const ok=await fbSaveT(T);btn.textContent='START & SHARE 🎾';btn.disabled=false;
-  if(!ok)return;openTournament();toast(`Created! Code: ${T.code}`);
+  if(!ok)return;T.createdBy=currentUser?currentUser.username:null;await fbSaveT(T);upsertMyTournament(T,true);openTournament();toast(`Created! Code: ${T.code}`);
 }
 
 async function doJoin(){
@@ -784,7 +860,7 @@ async function doJoin(){
   const btn=document.querySelector('#s-join .btn-primary');btn.textContent='Searching…';btn.disabled=true;
   const data=await fbLoadT(code);btn.textContent='JOIN →';btn.disabled=false;
   if(!data){toast('Tournament not found',true);return;}
-  T=data;openTournament();toast(`Joined ${T.name}!`);
+  T=data;upsertMyTournament(T,false);openTournament();toast(`Joined ${T.name}!`);
 }
 
 // ═══════════════════════════════════
@@ -803,6 +879,8 @@ function renderTopBar(){
   const totalM=T.rounds.reduce((a,r)=>a+r.matches.length,0);
   const savedM=T.rounds.reduce((a,r)=>a+r.matches.filter(m=>m.saved).length,0);
   const pct=totalM?Math.round(savedM/totalM*100):0;
+  const isCreator=!!(currentUser&&T.createdBy&&currentUser.username===T.createdBy);
+  const isCompleted=T.status==='completed';
   document.getElementById('tourn-topbar').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
       <div><button onclick="goHome()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0;margin-bottom:4px;">← Home</button>
@@ -819,7 +897,10 @@ function renderTopBar(){
     <div class="share-bar">
       <div><div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:2px;">Share Code</div><div class="share-code">${T.code}</div></div>
       <button class="copy-btn" id="copy-btn" onclick="copyCode()">📋 Copy</button>
-    </div>`;
+    </div>
+    ${isCompleted?`<div style="background:rgba(107,127,163,0.1);border:1px solid var(--border);border-radius:10px;padding:8px 14px;text-align:center;margin-bottom:8px;font-size:12px;color:var(--muted);">✅ Tournament Completed</div>`
+      :isCreator?`<button onclick="markTournamentComplete()" style="width:100%;margin-bottom:8px;padding:10px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:10px;color:var(--accent3);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.5px;">🏁 Mark as Complete</button>`
+      :''}`;
 }
 function copyCode(){navigator.clipboard.writeText(T.code).catch(()=>{});const btn=document.getElementById('copy-btn');if(!btn)return;btn.textContent='✓ Copied!';btn.classList.add('done');setTimeout(()=>{btn.textContent='📋 Copy';btn.classList.remove('done');},2000);}
 
@@ -849,32 +930,69 @@ function renderMatch(ri,mi){
   const div=document.createElement('div');div.className='match-card';div.id=`match-${ri}-${mi}`;
   if(match.saved){
     const wA=match.scoreA>match.scoreB;
+    const locked=T.status==='completed';
     div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
       <div class="teams-row">
         <div class="team" style="${wA?'color:var(--accent)':''}">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div>
         <div style="text-align:center;flex-shrink:0;min-width:80px;"><div class="saved-score"><span style="color:${wA?'var(--accent)':'var(--muted)'}">${match.scoreA}</span><span style="color:var(--muted);font-size:22px;"> – </span><span style="color:${!wA?'var(--accent2)':'var(--muted)'}">${match.scoreB}</span></div></div>
         <div class="team" style="${!wA?'color:var(--accent2)':''}">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div>
       </div>
-      <button class="edit-btn" onclick="editScore(${ri},${mi})">Edit score</button>`;
+      ${locked?'<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;">🔒 Locked</div>':`<button class="edit-btn" onclick="editScore(${ri},${mi})">Edit score</button>`}`;
   } else {
-    const sA=match.scoreA??0,sB=match.scoreB??0,tot=sA+sB,over=tot>ppg;
-    div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
-      <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
-      <div class="score-hint ${over?'over':''}" id="hint-${ri}-${mi}">${over?`⚠ Total ${tot} exceeds ${ppg} max`:`${tot} / ${ppg} pts · ${ppg-tot} left`}</div>
-      <div class="score-row">
-        <button class="step-btn" onclick="adj(${ri},${mi},'A',-1)">−</button>
-        <input class="score-inp ${over?'over':''}" type="number" id="sA-${ri}-${mi}" value="${sA}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'A')" onblur="onBlur(${ri},${mi},'A')"/>
-        <div class="score-dash">–</div>
-        <input class="score-inp ${over?'over':''}" type="number" id="sB-${ri}-${mi}" value="${sB}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'B')" onblur="onBlur(${ri},${mi},'B')"/>
-        <button class="step-btn" onclick="adj(${ri},${mi},'B',-1)">−</button>
-      </div>
-      <div class="plus-row">
-        <button class="plus-btn" onclick="adj(${ri},${mi},'A',1)">+ ${match.teamA[0].split(' ')[0]} & ${match.teamA[1].split(' ')[0]}</button>
-        <button class="plus-btn" onclick="adj(${ri},${mi},'B',1)">+ ${match.teamB[0].split(' ')[0]} & ${match.teamB[1].split(' ')[0]}</button>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="saveScore(${ri},${mi})">SAVE SCORE</button>`;
+    const hasScore=match.scoreA!==null||match.scoreB!==null;
+    const isCompleted=T.status==='completed';
+    if(isCompleted){
+      // completed tournament — show placeholder dash
+      div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
+        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
+        <div style="text-align:center;padding:6px 0;font-size:13px;color:var(--muted);">— not recorded —</div>`;
+    } else if(!hasScore){
+      // blank state — just show teams and a tap-to-enter button
+      div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
+        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
+        <button class="enter-score-btn" onclick="openScoreEntry(${ri},${mi})">+ Enter Score</button>`;
+    } else {
+      const sA=match.scoreA??0,sB=match.scoreB??0,tot=sA+sB,over=tot>ppg;
+      div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
+        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
+        <div class="score-hint ${over?'over':''}" id="hint-${ri}-${mi}">${over?`⚠ Total ${tot} exceeds ${ppg} max`:`${tot} / ${ppg} pts · ${ppg-tot} left`}</div>
+        <div class="score-row">
+          <button class="step-btn" onclick="adj(${ri},${mi},'A',-1)">−</button>
+          <input class="score-inp ${over?'over':''}" type="number" id="sA-${ri}-${mi}" value="${sA}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'A')" onblur="onBlur(${ri},${mi},'A')"/>
+          <div class="score-dash">–</div>
+          <input class="score-inp ${over?'over':''}" type="number" id="sB-${ri}-${mi}" value="${sB}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'B')" onblur="onBlur(${ri},${mi},'B')"/>
+          <button class="step-btn" onclick="adj(${ri},${mi},'B',-1)">−</button>
+        </div>
+        <div class="plus-row">
+          <button class="plus-btn" onclick="adj(${ri},${mi},'A',1)">+ ${match.teamA[0].split(' ')[0]} & ${match.teamA[1].split(' ')[0]}</button>
+          <button class="plus-btn" onclick="adj(${ri},${mi},'B',1)">+ ${match.teamB[0].split(' ')[0]} & ${match.teamB[1].split(' ')[0]}</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveScore(${ri},${mi})">SAVE SCORE</button>
+          <button class="btn btn-secondary btn-sm" onclick="clearScoreEntry(${ri},${mi})" style="padding:9px 14px;">✕</button>
+        </div>`;
+    }
   }
   container.appendChild(div);
+}
+
+// ═══════════════════════════════════
+//  SCORE ENTRY OPEN/CLEAR
+// ═══════════════════════════════════
+function openScoreEntry(ri,mi){
+  // set scores to 0 to trigger the entry UI
+  T.rounds[ri].matches[mi].scoreA=0;
+  T.rounds[ri].matches[mi].scoreB=0;
+  renderMatch(ri,mi);
+  // focus first input
+  const el=document.getElementById(`sA-${ri}-${mi}`);
+  if(el){el.focus();el.select();}
+}
+function clearScoreEntry(ri,mi){
+  // reset back to blank
+  T.rounds[ri].matches[mi].scoreA=null;
+  T.rounds[ri].matches[mi].scoreB=null;
+  renderMatch(ri,mi);
 }
 
 // ═══════════════════════════════════
@@ -920,6 +1038,17 @@ async function saveScore(ri,mi){
   if(savedM===totalM) await commitTournamentToProfiles();
 }
 async function editScore(ri,mi){T.rounds[ri].matches[mi].saved=false;await fbSaveT(T);renderRounds();renderTopBar();}
+
+async function markTournamentComplete(){
+  if(!confirm('Mark this tournament as complete? This will lock scoring and save results to player profiles.')) return;
+  T.status='completed';
+  T.completedAt=new Date().toISOString();
+  await fbSaveT(T);
+  upsertMyTournament(T, true);
+  renderTopBar();
+  await commitTournamentToProfiles();
+  toast('Tournament completed! Results saved 🏆');
+}
 
 // ═══════════════════════════════════
 //  COMMIT TOURNAMENT RESULTS TO PLAYER PROFILES
