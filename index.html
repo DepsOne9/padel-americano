@@ -198,6 +198,7 @@ input[type=number]{-moz-appearance:textfield;}
     <div class="row" style="margin-bottom:12px;">
       <button class="btn btn-primary" style="flex:1;" onclick="goSetup()">+ New</button>
       <button class="btn btn-secondary" style="flex:1;" onclick="goJoin()">Join</button>
+      <button class="btn btn-secondary" style="flex:1;" onclick="goLeaderboard()">🏆</button>
     </div>
     <!-- my tournaments list -->
     <div id="home-tourn-list"></div>
@@ -285,10 +286,21 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ PLAYER PROFILE ════════════════════════════════════ -->
 <div class="screen" id="s-profile">
-  <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:44px 16px 12px;position:relative;">
+  <div class="hdr" style="padding-bottom:14px;">
     <button class="back-btn" onclick="closeProfile()">← Back</button>
   </div>
   <div id="profile-body" style="padding-bottom:40px;overflow-y:auto;"></div>
+</div>
+
+<!-- ══ LEADERBOARD ══════════════════════════════════════ -->
+<div class="screen" id="s-leaderboard">
+  <div class="hdr" style="padding-bottom:16px;">
+    <button class="back-btn" onclick="goHome()">← Home</button>
+    <div class="logo" style="font-size:36px;letter-spacing:3px;">LEADERBOARD</div>
+    <div class="logo-sub">Global Rankings</div>
+  </div>
+  <div id="lb-global-tabs" style="display:flex;background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;"></div>
+  <div id="lb-global-body" style="padding-bottom:80px;overflow-y:auto;"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -327,7 +339,12 @@ function goHome(){if(fbUnsub){try{fbUnsub();}catch(e){}}fbUnsub=null;T=null;rend
 function goSetup(){show('s-setup');buildPlayerInputs();checkBye();}
 function goJoin(){show('s-join');}
 function goAccount(){renderAccountScreen();show('s-account');}
-function closeProfile(){if(profileBackTarget==='account'){renderAccountScreen();show('s-account');}else{show('s-tourn');}}
+function goLeaderboard(){renderLeaderboard();show('s-leaderboard');}
+function closeProfile(){
+  if(profileBackTarget==='account'){renderAccountScreen();show('s-account');}
+  else if(profileBackTarget==='leaderboard'){show('s-leaderboard');}
+  else{show('s-tourn');}
+}
 
 // ═══════════════════════════════════
 //  HOME ACCOUNT AREA
@@ -883,7 +900,7 @@ function renderTopBar(){
   const isCompleted=T.status==='completed';
   document.getElementById('tourn-topbar').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-      <div><button onclick="goHome()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0;margin-bottom:4px;">← Home</button>
+      <div><button onclick="goHome()" class="back-btn" style="position:static;margin-bottom:6px;display:inline-block;">← Home</button>
         <div style="font-weight:700;font-size:17px;">${T.name}</div>
         <div style="color:var(--muted);font-size:12px;">${T.players.length} players · ${T.pointsPerGame}pts · ${T.rounds.length} rounds</div>
       </div>
@@ -1261,6 +1278,155 @@ function renderPartners(){
       ${notYet.length?`<div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:8px 0 4px;">Scheduled with</div><div class="tags-wrap">${notYet.map(q=>`<span class="ptag-sched">${q}</span>`).join('')}</div>`:''}
     </div>`;
   });
+}
+
+// ═══════════════════════════════════
+//  GLOBAL LEADERBOARD
+// ═══════════════════════════════════
+let globalLbTab = 'yearly';
+
+function renderLeaderboard(){
+  // render tabs immediately, then load data
+  const tabEl = document.getElementById('lb-global-tabs');
+  const bodyEl = document.getElementById('lb-global-body');
+  if(!tabEl||!bodyEl) return;
+  renderLbTabs();
+  bodyEl.innerHTML = `<div style="padding:40px 0;"><div class="spinner"></div></div>`;
+  loadLeaderboardData();
+}
+
+function renderLbTabs(){
+  const tabEl = document.getElementById('lb-global-tabs');
+  if(!tabEl) return;
+  const now = new Date();
+  const yearLabel = now.getFullYear();
+  const monthLabel = now.toLocaleString('en-GB',{month:'long'});
+  tabEl.innerHTML = `
+    <div class="lb-tab ${globalLbTab==='yearly'?'on':''}" onclick="switchGlobalLbTab('yearly')" style="flex:1;text-align:center;">📅 ${yearLabel}</div>
+    <div class="lb-tab ${globalLbTab==='monthly'?'on':''}" onclick="switchGlobalLbTab('monthly')" style="flex:1;text-align:center;">🗓 ${monthLabel}</div>`;
+}
+
+function switchGlobalLbTab(tab){
+  globalLbTab = tab;
+  renderLbTabs();
+  renderLbBody(window._cachedLbPlayers||[]);
+}
+
+async function loadLeaderboardData(){
+  let allPlayers = [];
+  try{
+    const data = await window._fbGet('players');
+    if(data) allPlayers = Object.values(data).filter(p=>p.username&&!p.redirectTo);
+  } catch(e){
+    document.getElementById('lb-global-body').innerHTML=`<div class="empty"><div class="ei">⚠️</div>Could not load data</div>`;
+    return;
+  }
+  window._cachedLbPlayers = allPlayers;
+  renderLbBody(allPlayers);
+}
+
+function renderLbBody(allPlayers){
+  const bodyEl = document.getElementById('lb-global-body');
+  if(!bodyEl) return;
+
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const thisMonth = now.getMonth(); // 0-indexed
+
+  // build per-player score for selected period
+  const rows = allPlayers.map(p=>{
+    const history = p.tournaments||[];
+    let pts=0, wins=0, losses=0, played=0, count=0;
+    history.forEach(th=>{
+      const d = th.date ? new Date(th.date) : null;
+      if(!d) return;
+      const matchYear = d.getFullYear();
+      const matchMonth = d.getMonth();
+      const inPeriod = globalLbTab==='yearly'
+        ? matchYear===thisYear
+        : matchYear===thisYear && matchMonth===thisMonth;
+      if(!inPeriod) return;
+      pts   += th.points||0;
+      wins  += th.wins||0;
+      losses+= th.losses||0;
+      played+= th.played||0;
+      count++;
+    });
+    // for yearly, also add legacy points if we're on yearly tab
+    if(globalLbTab==='yearly') pts += (p.legacy_points||0);
+    return { username:p.username, avatar:p.avatar||null, pts, wins, losses, played, count };
+  })
+  .filter(r=>r.count>0 || (globalLbTab==='yearly' && r.pts>0))
+  .sort((a,b)=>b.pts-a.pts||b.wins-a.wins);
+
+  if(!rows.length){
+    const period = globalLbTab==='yearly'?`${thisYear}`:`${now.toLocaleString('en-GB',{month:'long'})} ${thisYear}`;
+    bodyEl.innerHTML=`<div class="empty"><div class="ei">🎾</div>No tournament data for ${period} yet</div>`;
+    return;
+  }
+
+  const maxPts = rows[0].pts||1;
+  const medals = ['🥇','🥈','🥉'];
+  const period = globalLbTab==='yearly'?`${thisYear}`:`${now.toLocaleString('en-GB',{month:'long',year:'numeric'})}`;
+
+  // ── podium top 3
+  const top = rows.slice(0,Math.min(3,rows.length));
+  const podOrder = top.length>=3?[top[1],top[0],top[2]]:top.length===2?[top[1],top[0]]:[top[0]];
+  const podCls   = top.length>=3?['p2','p1','p3']:top.length===2?['p2','p1']:['p1'];
+
+  let html = `<div class="podium-wrap">`;
+  podOrder.forEach((p,i)=>{
+    if(!p)return;
+    const pc=podCls[i];
+    const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`${p.username[0].toUpperCase()}`;
+    html+=`<div class="pod ${pc}" onclick="openLbProfile('${p.username}')">
+      ${pc==='p1'?`<div style="font-size:20px;margin-bottom:4px;">${medals[0]}</div>`:''}
+      <div class="pod-avatar" style="overflow:hidden;">${av}</div>
+      <div class="pod-name">${p.username}</div>
+      <div class="pod-pts">${p.pts}</div>
+      <div class="pod-lbl">pts</div>
+      <div class="pod-block"></div>
+    </div>`;
+  });
+  html+=`</div>`;
+
+  // ── full ranked list
+  html+=`<div class="lb-section">
+    <div class="lb-section-title">${period} · ${rows.length} Players</div>`;
+
+  rows.forEach((p,i)=>{
+    const pct = Math.round(p.pts/maxPts*100);
+    const isMe = currentUser&&currentUser.username===p.username;
+    const medal = medals[i]||null;
+    const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`<span style="font-family:'Bebas Neue',cursive;font-size:13px;color:var(--accent);">${p.username[0].toUpperCase()}</span>`;
+    html+=`<div onclick="openLbProfile('${p.username}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:7px;cursor:pointer;">
+      <div style="font-family:'Bebas Neue',cursive;font-size:${i<3?'20':'16'}px;min-width:24px;text-align:center;color:${i===0?'var(--accent3)':i===1?'#aaa':i===2?'#cd7f32':'var(--muted)'};">${medal||i+1}</div>
+      <div style="width:34px;height:34px;border-radius:50%;background:rgba(0,229,160,0.08);border:2px solid ${isMe?'var(--accent)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">${av}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:5px;">${p.username}${isMe?`<span style="font-size:9px;background:var(--accent);color:var(--bg);padding:2px 5px;border-radius:4px;font-weight:700;">YOU</span>`:''}</div>
+        <div style="height:4px;background:var(--border);border-radius:2px;margin-top:5px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${i<3?'var(--accent)':'var(--muted)'};border-radius:2px;"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:22px;color:${i<3?'var(--accent)':'var(--text)'};line-height:1;">${p.pts}</div>
+        <div style="font-size:10px;color:var(--muted);">${p.wins}W · ${p.losses}L</div>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+
+  // ── footer stats
+  html+=`<div class="lb-footer">
+    <div class="lb-footer-cell"><span class="fv">${rows.length}</span><span class="fl">Players</span></div>
+    <div class="lb-footer-cell"><span class="fv">${rows.reduce((a,r)=>a+r.count,0)}</span><span class="fl">Tourneys</span></div>
+    <div class="lb-footer-cell"><span class="fv">${rows.reduce((a,r)=>a+r.pts,0)}</span><span class="fl">Total Pts</span></div>
+  </div>`;
+
+  bodyEl.innerHTML = html;
+}
+
+async function openLbProfile(username){
+  profileBackTarget = 'leaderboard';
+  await openProfileScreen(username);
 }
 
 // ═══════════════════════════════════
