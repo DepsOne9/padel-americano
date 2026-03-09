@@ -1231,9 +1231,9 @@ function renderTopBar(){
       <div style="display:flex;gap:8px;margin-bottom:8px;">
         ${isCompleted
           ?`<div style="flex:1;padding:9px 10px;background:rgba(107,127,163,0.08);border:1px solid var(--border);border-radius:10px;text-align:center;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.3px;">✅ Completed</div>
-            <button onclick="reopenTournament()" style="flex:1;padding:9px 10px;background:rgba(0,229,160,0.07);border:1px solid rgba(0,229,160,0.25);border-radius:10px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🔓 Reopen</button>`
+            <button onclick="reopenTournamentStatus()" style="flex:1;padding:9px 10px;background:rgba(0,229,160,0.07);border:1px solid rgba(0,229,160,0.25);border-radius:10px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🔓 Reopen</button>`
           :`<button onclick="markTournamentComplete()" style="flex:1;padding:9px 10px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:10px;color:var(--accent3);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🏁 Complete</button>
-            <button onclick="reopenTournament()" style="display:none;"></button>`
+            <button onclick="reopenTournamentStatus()" style="display:none;"></button>`
         }
         <button onclick="deleteTournament()" style="padding:9px 14px;background:rgba(255,92,92,0.08);border:1px solid rgba(255,92,92,0.25);border-radius:10px;color:var(--accent2);font-size:18px;cursor:pointer;" title="Delete tournament">🗑</button>
       </div>`
@@ -1364,7 +1364,7 @@ async function markTournamentComplete(){
   toast('Tournament completed! Results saved 🏆');
 }
 
-async function reopenTournament(){
+async function reopenTournamentStatus(){
   const confirmed=await showConfirm('Reopen Tournament','This will unlock scoring so matches can be edited again.','Reopen 🔓');
   if(!confirmed)return;
   T.status='active';
