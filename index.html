@@ -16,9 +16,7 @@
     getAuth, onAuthStateChanged,
     signOut,
     GoogleAuthProvider,
-    signInWithPopup,
-    signInWithRedirect,
-    getRedirectResult
+    signInWithPopup
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
   const firebaseConfig = {
@@ -50,20 +48,12 @@
   window._fbListen = (path,cb)         => onValue(ref(db,path), s=>{ if(s.exists()) cb(s.val()); });
 
   // ── Google Sign-In ──
-  // Use popup on desktop, redirect on mobile (more reliable)
-  window._authSignInGoogle = async () => {
-    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-    if(isMobile){
-      await signInWithRedirect(auth, provider);
-    } else {
-      await signInWithPopup(auth, provider);
-    }
-  };
-  window._authSignOut     = () => signOut(auth);
-  window._authCurrentUser = () => auth.currentUser;
-
-  // ── Handle redirect result (called on page load after mobile redirect) ──
-  getRedirectResult(auth).catch(()=>{}); // errors handled by onAuthStateChanged
+  // Always use redirect (works on all browsers including mobile WebView/Safari)
+  // Use popup for sign-in (works on mobile browsers; redirect loses state on GitHub Pages)
+  provider.setCustomParameters({ prompt: 'select_account' });
+  window._authSignInGoogle = () => signInWithPopup(auth, provider);
+  window._authSignOut      = () => signOut(auth);
+  window._authCurrentUser  = () => auth.currentUser;
 
   // ── Auth state listener ──
   onAuthStateChanged(auth, async (firebaseUser) => {
@@ -769,15 +759,23 @@ async function doCompleteSetup(){
 
 async function doGoogleSignIn(){
   if(!navigator.onLine){toast('No internet connection',true);return;}
+  const btn=document.querySelector('[onclick="doGoogleSignIn()"]');
+  const googleBtnHTML=btn?btn.innerHTML:'';
+  if(btn){btn.textContent='Opening Google…';btn.disabled=true;}
   try{
     await window._authSignInGoogle();
-    // onAuthStateChanged fires → auth-ready event handles the rest
+    // onAuthStateChanged fires → auth-ready → renderAccountScreen handles the rest
   }catch(e){
-    if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request') return;
-    toast('Sign in failed — try again',true);
+    const code=e.code||'';
+    // User closed popup — silent, just re-enable
+    if(code==='auth/popup-closed-by-user'||code==='auth/cancelled-popup-request'||code==='auth/popup-blocked'){
+      if(code==='auth/popup-blocked') toast('Popup blocked — allow popups for this site',true);
+    } else {
+      toast('Sign in failed: '+code,true);
+    }
+    if(btn){btn.innerHTML=googleBtnHTML;btn.disabled=false;}
   }
 }
-
 async function doGoogleSignOut(){
   await window._authSignOut();
   currentUser=null;_pendingGoogleUser=null;
