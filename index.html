@@ -801,6 +801,71 @@ function switchAcctTab(tab){
   if(tab==='global')renderGlobalRanking();
 }
 
+function renderAcctMe(){
+  const el=document.getElementById('acct-pane-me');if(!el)return;
+  const u=currentUser;
+  const avatarContent=u.avatar
+    ?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`
+    :u.photoURL
+      ?`<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`
+      :u.username[0].toUpperCase();
+  const lastChange=u.lastUsernameChange?new Date(u.lastUsernameChange):null;
+  const daysSince=lastChange?Math.floor((new Date()-lastChange)/(1000*60*60*24)):999;
+  const canChange=daysSince>=14;
+  const daysLeft=14-daysSince;
+  el.innerHTML=`
+    <div style="text-align:center;padding:20px 16px 16px;">
+      <div style="position:relative;width:82px;margin:0 auto 12px;">
+        <div id="avatar-display" style="width:82px;height:82px;border-radius:50%;background:rgba(0,229,160,0.1);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:38px;color:var(--accent);overflow:hidden;">${avatarContent}</div>
+        <label for="avatar-upload" style="position:absolute;bottom:0;right:0;width:26px;height:26px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:2px solid var(--bg);" title="Change photo">📷</label>
+        <input type="file" id="avatar-upload" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)"/>
+      </div>
+      <div style="display:inline-flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:50px;padding:4px 10px;margin-bottom:10px;">
+        <svg width="13" height="13" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-3.58-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        <span style="font-size:11px;color:var(--muted);">Signed in with Google</span>
+      </div>
+      <div id="username-display">
+        <div style="font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:2px;">${u.username}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">Member since ${fmtDate(u.joinedAt)}</div>
+        ${canChange
+          ?`<button onclick="showUsernameEdit()" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:50px;font-size:12px;font-weight:600;cursor:pointer;">✏️ Change username</button>`
+          :`<div style="margin-top:8px;font-size:11px;color:var(--muted);">Change available in <strong style="color:var(--accent3);">${daysLeft}d</strong></div>`
+        }
+      </div>
+      <div id="username-edit" style="display:none;margin-top:10px;">
+        <div style="margin-bottom:8px;">
+          <input id="new-username-inp" type="text" placeholder="new username" autocapitalize="none"
+            style="width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;color:var(--text);font-size:15px;outline:none;text-align:center;"/>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="doUsernameChange()">Save</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="hideUsernameEdit()">Cancel</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">You can change again in 14 days</div>
+      </div>
+    </div>
+    <div style="padding:0 16px 12px;">
+      <div style="background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:10px;padding:10px 14px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:4px;">Tournament Display Name</div>
+        <div style="font-size:14px;font-weight:600;">${u.displayName||u.username}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Enter this name exactly when joining tournaments to auto-link results</div>
+        <button onclick="showDisplayNameEdit()" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:50px;font-size:12px;font-weight:600;cursor:pointer;">✏️ Edit</button>
+        <div id="display-name-edit" style="display:none;margin-top:10px;">
+          <input id="new-display-inp" type="text" placeholder="e.g. Carlos" value="${u.displayName||''}"
+            style="width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;color:var(--text);font-size:15px;outline:none;margin-bottom:8px;"/>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary btn-sm" style="flex:1;" onclick="doDisplayNameChange()">Save</button>
+            <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="document.getElementById('display-name-edit').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 16px;">
+      <button class="btn btn-primary" style="margin-bottom:10px;" onclick="viewMyProfile()">📊 View Full Profile & History</button>
+      <button class="btn btn-danger" onclick="doGoogleSignOut()">Sign Out</button>
+    </div>`;
+}
+
 function showDisplayNameEdit(){
   document.getElementById('display-name-edit').style.display='block';
 }
