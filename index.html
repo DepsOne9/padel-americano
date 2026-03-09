@@ -132,7 +132,8 @@ input[type=number]{-moz-appearance:textfield;}
 .court-lbl{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
 .teams-row{display:flex;align-items:flex-start;gap:6px;margin-bottom:8px;}
 .team{flex:1;text-align:center;}
-.pname{display:block;font-size:13px;font-weight:600;line-height:1.4;}
+.pname{display:block;font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;transition:opacity 0.15s;}
+.pname:active{opacity:0.6;}
 .vs-lbl{font-size:12px;font-weight:700;color:var(--muted);min-width:26px;text-align:center;flex-shrink:0;padding-top:3px;}
 .score-hint{font-size:11px;text-align:center;margin-bottom:8px;color:var(--muted);}
 .score-hint.over{color:var(--accent2);font-weight:700;}
@@ -1320,9 +1321,9 @@ function renderMatch(ri,mi){
     const locked=T.status==='completed';
     div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
       <div class="teams-row">
-        <div class="team" style="${wA?'color:var(--accent)':''}">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div>
+        <div class="team" style="${wA?'color:var(--accent)':''}">${match.teamA.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div>
         <div style="text-align:center;flex-shrink:0;min-width:80px;"><div class="saved-score"><span style="color:${wA?'var(--accent)':'var(--muted)'}">${match.scoreA}</span><span style="color:var(--muted);font-size:22px;"> – </span><span style="color:${!wA?'var(--accent2)':'var(--muted)'}">${match.scoreB}</span></div></div>
-        <div class="team" style="${!wA?'color:var(--accent2)':''}">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div>
+        <div class="team" style="${!wA?'color:var(--accent2)':''}">${match.teamB.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div>
       </div>
       ${locked?'<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;">🔒 Locked</div>':`<button class="edit-btn" onclick="editScore(${ri},${mi})">Edit score</button>`}`;
   } else {
@@ -1330,16 +1331,16 @@ function renderMatch(ri,mi){
     const isCompleted=T.status==='completed';
     if(isCompleted){
       div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
-        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
+        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div></div>
         <div style="text-align:center;padding:6px 0;font-size:13px;color:var(--muted);">— not recorded —</div>`;
     } else if(!hasScore){
       div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
-        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
+        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div></div>
         <button class="enter-score-btn" onclick="openScoreEntry(${ri},${mi})">+ Enter Score</button>`;
     } else {
       const sA=match.scoreA??0,sB=match.scoreB??0,tot=sA+sB,over=tot>ppg;
       div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
-        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
+        <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname" onclick="onPlayerTap('${p}')">${p}</span>`).join('')}</div></div>
         <div class="score-hint ${over?'over':''}" id="hint-${ri}-${mi}">${over?`⚠ Total ${tot} exceeds ${ppg} max`:`${tot} / ${ppg} pts · ${ppg-tot} left`}</div>
         <div class="score-row">
           <input class="score-inp ${over?'over':''}" type="number" id="sA-${ri}-${mi}" placeholder="0" value="${sA||''}" min="0" max="${ppg}" oninput="onInput(${ri},${mi},'A')" onblur="onBlur(${ri},${mi},'A')"/>
@@ -1611,7 +1612,7 @@ async function onPlayerTap(name){
       }
     }catch(e){}
   }
-  showTournamentProfile(name);
+  // No linked account found — silently do nothing
 }
 
 function showTournamentProfile(playerName){
@@ -1670,7 +1671,7 @@ function renderPartners(){
   pane.innerHTML=`<div class="sec">Partner History</div>`;
   T.players.forEach(p=>{
     const played=Array.from(partners[p]),notYet=Array.from(upcoming[p]).filter(x=>!played.includes(x));
-    pane.innerHTML+=`<div class="card fade-up"><div style="font-weight:600;font-size:15px;margin-bottom:8px;">${p}</div>
+    pane.innerHTML+=`<div class="card fade-up"><div style="font-weight:600;font-size:15px;margin-bottom:8px;cursor:pointer;" onclick="onPlayerTap('${p}')">${p}</div>
       ${played.length?`<div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Played with</div><div class="tags-wrap">${played.map(q=>`<span class="ptag">✓ ${q}</span>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px;">No matches yet</div>'}
       ${notYet.length?`<div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:8px 0 4px;">Scheduled with</div><div class="tags-wrap">${notYet.map(q=>`<span class="ptag-sched">${q}</span>`).join('')}</div>`:''}
     </div>`;
