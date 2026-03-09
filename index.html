@@ -10,8 +10,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { initializeApp }                        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import {
+    getAuth, onAuthStateChanged,
+    signOut,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
   const firebaseConfig = {
     apiKey: "AIzaSyA9OxHS-p_458IoxUQLIPmZ6_AM1JZMH2Q",
     authDomain: "padel-americano19.firebaseapp.com",
@@ -21,13 +30,67 @@
     messagingSenderId: "955161797764",
     appId: "1:955161797764:web:6b996657ab7a6153cc0ed1"
   };
-  const app = initializeApp(firebaseConfig);
-  const db  = getDatabase(app);
-  window._fbSet    = (path, data) => set(ref(db, path), data);
-  window._fbGet    = async (path) => { const s = await get(ref(db, path)); return s.exists() ? s.val() : null; };
-  window._fbListen = (path, cb)   => onValue(ref(db, path), s => { if (s.exists()) cb(s.val()); });
-  window._fbListenOnce = (path, cb) => { const {onValue: ov, ref: r} = {onValue, ref}; const unsub=ov(r(db,path),s=>{if(s.exists())cb(s.val());unsub();},{onlyOnce:true}); };
-  window._fbReady  = true;
+
+  const app      = initializeApp(firebaseConfig);
+  const db       = getDatabase(app);
+  const auth     = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  // ── Timeout wrapper ──
+  function withTimeout(promise, ms=8000){
+    return Promise.race([
+      promise,
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))
+    ]);
+  }
+
+  // ── Database helpers ──
+  window._fbSet    = async (path,data) => { await withTimeout(set(ref(db,path),data)); };
+  window._fbGet    = async (path)      => { const s=await withTimeout(get(ref(db,path))); return s.exists()?s.val():null; };
+  window._fbListen = (path,cb)         => onValue(ref(db,path), s=>{ if(s.exists()) cb(s.val()); });
+
+  // ── Google Sign-In ──
+  // Use popup on desktop, redirect on mobile (more reliable)
+  window._authSignInGoogle = async () => {
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    if(isMobile){
+      await signInWithRedirect(auth, provider);
+    } else {
+      await signInWithPopup(auth, provider);
+    }
+  };
+  window._authSignOut     = () => signOut(auth);
+  window._authCurrentUser = () => auth.currentUser;
+
+  // ── Handle redirect result (called on page load after mobile redirect) ──
+  getRedirectResult(auth).catch(()=>{}); // errors handled by onAuthStateChanged
+
+  // ── Auth state listener ──
+  onAuthStateChanged(auth, async (firebaseUser) => {
+    if(firebaseUser){
+      try{
+        let profile = await window._fbGet(`players/${firebaseUser.uid}`);
+        window._currentFbUser = firebaseUser;
+        // Pass both the profile (may be null = new user) and the google user info
+        document.dispatchEvent(new CustomEvent('auth-ready', {detail:{
+          user: profile,
+          googleUser: {
+            uid:         firebaseUser.uid,
+            email:       firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL:    firebaseUser.photoURL
+          }
+        }}));
+      }catch(e){
+        document.dispatchEvent(new CustomEvent('auth-ready', {detail:{user:null, googleUser:null}}));
+      }
+    } else {
+      window._currentFbUser = null;
+      document.dispatchEvent(new CustomEvent('auth-ready', {detail:{user:null, googleUser:null}}));
+    }
+  });
+
+  window._fbReady = true;
   document.dispatchEvent(new Event('fb-ready'));
 </script>
 
@@ -49,6 +112,8 @@ input[type=number]{-moz-appearance:textfield;}
 .btn-primary{background:var(--accent);color:var(--bg);}
 .btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border);}
 .btn-danger{background:rgba(255,92,92,0.12);color:var(--accent2);border:1px solid rgba(255,92,92,0.25);}
+.btn-google{background:#fff;color:#1f1f1f;border:none;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:600;font-size:15px;}
+.btn-google:active{background:#f0f0f0;}
 .btn-sm{width:auto;display:inline-block;padding:9px 20px;font-size:14px;}
 .wrap{padding:0 16px 90px;}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;}
@@ -77,15 +142,10 @@ input[type=number]{-moz-appearance:textfield;}
 .score-hint{font-size:11px;text-align:center;margin-bottom:8px;color:var(--muted);}
 .score-hint.over{color:var(--accent2);font-weight:700;}
 .score-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
-.step-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.step-btn:active{background:var(--accent);color:var(--bg);}
 .score-inp{flex:1;text-align:center;background:var(--surface);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Bebas Neue',cursive;font-size:34px;padding:5px 2px;outline:none;width:100%;}
 .score-inp:focus{border-color:var(--accent);}
 .score-inp.over{border-color:var(--accent2);background:rgba(255,92,92,0.07);}
 .score-dash{font-size:22px;font-weight:600;color:var(--muted);flex-shrink:0;}
-.plus-row{display:flex;gap:8px;margin-bottom:10px;}
-.plus-btn{flex:1;padding:9px 6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;text-align:center;}
-.plus-btn:active{background:var(--accent);color:var(--bg);border-color:var(--accent);}
 .saved-score{font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:2px;text-align:center;}
 .edit-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:8px;font-size:12px;cursor:pointer;margin-top:4px;}
 .round-badge{font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);background:rgba(0,229,160,0.1);padding:4px 12px;border-radius:50px;}
@@ -100,12 +160,22 @@ input[type=number]{-moz-appearance:textfield;}
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--accent);color:var(--bg);padding:10px 24px;border-radius:50px;font-weight:700;font-size:14px;opacity:0;transition:all 0.3s;pointer-events:none;z-index:400;white-space:nowrap;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .toast.err{background:var(--accent2);color:#fff;}
+.toast.warn{background:var(--accent3);color:var(--bg);}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;animation:pulse 1.5s ease infinite;}
+.sync-dot.offline{background:var(--accent2);animation:none;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-up{animation:fadeUp 0.25s ease forwards;}
 .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:40px auto;}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── OFFLINE BANNER ── */
+.offline-banner{display:none;background:rgba(255,92,92,0.12);border-bottom:1px solid rgba(255,92,92,0.25);padding:8px 16px;text-align:center;font-size:12px;font-weight:600;color:var(--accent2);position:sticky;top:0;z-index:200;}
+.offline-banner.show{display:block;}
+
+/* ── LINK ACCOUNT BANNER ── */
+.link-banner{background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--accent3);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+.link-banner-btn{background:var(--accent3);color:var(--bg);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 
 /* ── OPTION A LEADERBOARD ── */
 .lb-tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;}
@@ -181,9 +251,32 @@ input[type=number]{-moz-appearance:textfield;}
 .badge-creator{background:rgba(255,209,102,0.1);border:1px solid rgba(255,209,102,0.25);color:var(--accent3);padding:2px 7px;border-radius:50px;font-size:9px;font-weight:700;letter-spacing:0.5px;}
 .enter-score-btn{width:100%;padding:10px;background:rgba(0,229,160,0.07);border:1px dashed rgba(0,229,160,0.25);border-radius:10px;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-align:center;letter-spacing:0.3px;}
 .enter-score-btn:active{background:rgba(0,229,160,0.15);}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(8,15,30,0.85);z-index:300;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.modal-overlay.show{opacity:1;pointer-events:all;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:18px 18px 0 0;width:100%;max-width:480px;padding:24px 20px 36px;transform:translateY(20px);transition:transform 0.25s;}
+.modal-overlay.show .modal-box{transform:translateY(0);}
+.modal-title{font-family:'Bebas Neue',cursive;font-size:26px;letter-spacing:2px;margin-bottom:6px;}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5;}
 </style>
 </head>
 <body>
+
+<!-- ── OFFLINE BANNER ─────────────────────────────────── -->
+<div class="offline-banner" id="offline-banner">⚠ No internet connection — changes won't save until you're back online</div>
+
+<!-- ── CONFIRM MODAL (replaces confirm()) ─────────────── -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Confirm</div>
+    <div class="modal-sub" id="modal-body"></div>
+    <div class="row">
+      <button class="btn btn-danger" style="flex:1;" id="modal-ok">Confirm</button>
+      <button class="btn btn-secondary" style="flex:1;" id="modal-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ HOME ══════════════════════════════════════════════ -->
 <div class="screen active" id="s-home">
@@ -194,13 +287,11 @@ input[type=number]{-moz-appearance:textfield;}
   </div>
   <div class="wrap" style="padding-top:4px;">
     <div id="home-acct-area"></div>
-    <!-- action buttons -->
     <div class="row" style="margin-bottom:12px;">
       <button class="btn btn-primary" style="flex:1;" onclick="goSetup()">+ New</button>
       <button class="btn btn-secondary" style="flex:1;" onclick="goJoin()">Join</button>
       <button class="btn btn-secondary" style="flex:1;" onclick="goLeaderboard()">🏆</button>
     </div>
-    <!-- my tournaments list -->
     <div id="home-tourn-list"></div>
   </div>
 </div>
@@ -307,29 +398,141 @@ input[type=number]{-moz-appearance:textfield;}
 
 <script>
 // ═══════════════════════════════════
+//  OFFLINE DETECTION
+// ═══════════════════════════════════
+function updateOnlineStatus(){
+  const banner=document.getElementById('offline-banner');
+  if(!navigator.onLine){
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
+// ═══════════════════════════════════
+//  CONFIRM MODAL (replaces confirm())
+// ═══════════════════════════════════
+function showConfirm(title, body, okLabel='Confirm'){
+  return new Promise(resolve=>{
+    const overlay=document.getElementById('confirm-modal');
+    document.getElementById('modal-title').textContent=title;
+    document.getElementById('modal-body').textContent=body;
+    document.getElementById('modal-ok').textContent=okLabel;
+    overlay.classList.add('show');
+    const ok=document.getElementById('modal-ok');
+    const cancel=document.getElementById('modal-cancel');
+    function cleanup(result){
+      overlay.classList.remove('show');
+      ok.replaceWith(ok.cloneNode(true));
+      cancel.replaceWith(cancel.cloneNode(true));
+      resolve(result);
+    }
+    document.getElementById('modal-ok').onclick=()=>cleanup(true);
+    document.getElementById('modal-cancel').onclick=()=>cleanup(false);
+    overlay.onclick=e=>{ if(e.target===overlay) cleanup(false); };
+  });
+}
+
+// ═══════════════════════════════════
 //  STATE
 // ═══════════════════════════════════
 let T=null, byeChoice='half', fbUnsub=null, activeTab='rounds', lbTab='points';
-let currentUser=null, profileBackTarget='ranking';
+let currentUser=null, profileBackTarget='ranking', _pendingGoogleUser=null;
 
 // ═══════════════════════════════════
-//  FIREBASE
+//  AUTH-STATE BOOTSTRAP
+// ═══════════════════════════════════
+let _authResolved = false;
+document.addEventListener('auth-ready', (e) => {
+  const { user: profile, googleUser } = e.detail;
+
+  if(googleUser && !profile){
+    // Authenticated with Google but no DB profile yet → show username setup
+    currentUser = null;
+    _pendingGoogleUser = googleUser;
+    if(!_authResolved){ _authResolved=true; renderHomeAcct(); }
+    // If account screen is open, show setup there
+    if(document.getElementById('s-account').classList.contains('active')){
+      renderAccountScreen();
+    }
+  } else if(profile){
+    currentUser = profile;
+    _pendingGoogleUser = null;
+    if(!_authResolved){ _authResolved=true; renderHomeAcct(); }
+    else { renderHomeAcct(); if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen(); }
+  } else {
+    currentUser = null;
+    _pendingGoogleUser = null;
+    if(!_authResolved){ _authResolved=true; renderHomeAcct(); }
+    else { renderHomeAcct(); if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen(); }
+  }
+}, {once:false});
+
+// ═══════════════════════════════════
+//  FIREBASE HELPERS
 // ═══════════════════════════════════
 function waitFb(cb){if(window._fbReady){cb();return;}document.addEventListener('fb-ready',cb,{once:true});}
-async function fbSaveT(t){try{await window._fbSet(`tournaments/${t.code}`,t);return true;}catch(e){toast('Save failed',true);return false;}}
-async function fbLoadT(code){try{return await window._fbGet(`tournaments/${code}`);}catch(e){return null;}}
-function fbListenT(code){if(fbUnsub){try{fbUnsub();}catch(e){}}fbUnsub=window._fbListen(`tournaments/${code}`,d=>{T=d;if(T) upsertMyTournament(T, !!(currentUser&&T.createdBy&&currentUser.username===T.createdBy));renderTournament();});}
-async function fbSaveP(p){try{await window._fbSet(`players/${p.username}`,p);return true;}catch(e){toast('Save failed',true);return false;}}
-async function fbLoadP(u){try{return await window._fbGet(`players/${u}`);}catch(e){return null;}}
 
-// ═══════════════════════════════════
-//  SESSION
-// ═══════════════════════════════════
-function loadSess(){try{const s=localStorage.getItem('pa_user');if(s)currentUser=JSON.parse(s);}catch(e){}}
-function saveSess(u){currentUser=u;try{localStorage.setItem('pa_user',JSON.stringify(u));}catch(e){}}
-function clearSess(){currentUser=null;try{localStorage.removeItem('pa_user');}catch(e){}}
-function hashPw(p){let h=0;for(let i=0;i<p.length;i++){h=((h<<5)-h)+p.charCodeAt(i);h|=0;}return h.toString(36);}
-loadSess();
+async function fbSaveT(t){
+  if(!navigator.onLine){toast('No internet — score saved locally only',true);return false;}
+  try{
+    await window._fbSet(`tournaments/${t.code}`,t);
+    return true;
+  }catch(e){
+    toast(e.message==='timeout'?'Connection timed out, try again':'Save failed — check your connection',true);
+    return false;
+  }
+}
+
+async function fbLoadT(code){
+  if(!navigator.onLine){toast('No internet connection',true);return null;}
+  try{return await window._fbGet(`tournaments/${code}`);}
+  catch(e){
+    toast(e.message==='timeout'?'Connection timed out':'Could not load tournament',true);
+    return null;
+  }
+}
+
+function fbListenT(code){
+  if(fbUnsub){try{fbUnsub();}catch(e){}}
+  fbUnsub=window._fbListen(`tournaments/${code}`,d=>{
+    T=d;
+    if(T) upsertMyTournament(T, !!(currentUser&&T.createdBy&&currentUser.username===T.createdBy));
+    renderTournament();
+  });
+}
+
+// Players are now keyed by Firebase UID, not username
+async function fbSaveP(profile){
+  if(!navigator.onLine){toast('No internet — profile not saved',true);return false;}
+  const fbUser = window._authCurrentUser();
+  if(!fbUser){toast('Not signed in',true);return false;}
+  try{
+    await window._fbSet(`players/${fbUser.uid}`, profile);
+    currentUser = {...profile, email: fbUser.email};
+    return true;
+  }catch(e){
+    toast(e.message==='timeout'?'Profile save timed out':'Profile save failed',true);
+    return false;
+  }
+}
+
+// Look up a player profile — by uid (primary) or username slug (for legacy linking)
+async function fbLoadP(usernameOrUid){
+  if(!navigator.onLine) return null;
+  try{
+    // First try as a UID directly
+    let data = await window._fbGet(`players/${usernameOrUid}`);
+    if(data && !data.redirectTo) return data;
+    // Fall back: scan for matching username (slower, only used for tournament linking)
+    const all = await window._fbGet('players');
+    if(!all) return null;
+    return Object.values(all).find(p => !p.redirectTo && p.username === usernameOrUid) || null;
+  }catch(e){return null;}
+}
 
 // ═══════════════════════════════════
 //  NAVIGATION
@@ -347,18 +550,16 @@ function closeProfile(){
 }
 
 // ═══════════════════════════════════
-//  HOME ACCOUNT AREA
+//  HOME / TOURNAMENT LIST
 // ═══════════════════════════════════
-// stored locally: [{code, name, createdAt, status, isCreator, playerCount, rounds}]
-let myTournaments = [];
-function loadMyTournaments(){ try{ const s=localStorage.getItem('pa_my_tourneys'); if(s) myTournaments=JSON.parse(s); }catch(e){} }
-function saveMyTournaments(){ try{ localStorage.setItem('pa_my_tourneys', JSON.stringify(myTournaments)); }catch(e){} }
-function upsertMyTournament(t, isCreator){
-  const entry={ code:t.code, name:t.name, createdAt:t.createdAt, status:t.status||'active',
-    isCreator:!!isCreator, playerCount:t.players.length, rounds:t.rounds.length };
+let myTournaments=[];
+function loadMyTournaments(){try{const s=localStorage.getItem('pa_my_tourneys');if(s)myTournaments=JSON.parse(s);}catch(e){}}
+function saveMyTournaments(){try{localStorage.setItem('pa_my_tourneys',JSON.stringify(myTournaments));}catch(e){}}
+function upsertMyTournament(t,isCreator){
+  const entry={code:t.code,name:t.name,createdAt:t.createdAt,status:t.status||'active',
+    isCreator:!!isCreator,playerCount:t.players.length,rounds:t.rounds.length};
   const idx=myTournaments.findIndex(x=>x.code===t.code);
   if(idx>=0) myTournaments[idx]=entry; else myTournaments.unshift(entry);
-  // keep max 30, newest first
   if(myTournaments.length>30) myTournaments=myTournaments.slice(0,30);
   saveMyTournaments();
 }
@@ -367,16 +568,20 @@ loadMyTournaments();
 function renderHomeAcct(){
   const el=document.getElementById('home-acct-area');
   if(currentUser){
-    const avatarContent=currentUser.avatar?`<img src="${currentUser.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:currentUser.username[0].toUpperCase();
+    const avatarContent=currentUser.avatar
+      ?`<img src="${currentUser.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`
+      :currentUser.username[0].toUpperCase();
     el.innerHTML=`<div class="acct-chip" onclick="goAccount()">
       <div class="acct-avatar-sm" style="overflow:hidden;">${avatarContent}</div>
-      <div style="flex:1;"><div style="font-size:14px;font-weight:700;">${currentUser.username}</div><div style="font-size:11px;color:var(--muted);">View profile & global stats →</div></div>
+      <div style="flex:1;"><div style="font-size:14px;font-weight:700;">${currentUser.username}</div>
+      <div style="font-size:11px;color:var(--muted);">View profile & global stats →</div></div>
       <div style="color:var(--muted);font-size:18px;">›</div>
     </div>`;
   } else {
     el.innerHTML=`<div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;" onclick="goAccount()">
       <div style="font-size:28px;">👤</div>
-      <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Create or Sign In</div><div style="font-size:12px;color:var(--muted);">Track your stats across all tournaments</div></div>
+      <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Create or Sign In</div>
+      <div style="font-size:12px;color:var(--muted);">Track your stats across all tournaments</div></div>
       <div style="color:var(--muted);font-size:18px;">›</div>
     </div>`;
   }
@@ -384,25 +589,17 @@ function renderHomeAcct(){
 }
 
 function renderHomeTournList(){
-  const el=document.getElementById('home-tourn-list'); if(!el)return;
+  const el=document.getElementById('home-tourn-list');if(!el)return;
   if(!myTournaments.length){
     el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--muted);font-size:13px;">
-      <div style="font-size:36px;margin-bottom:8px;">🎾</div>
-      Create or join a tournament to get started
-    </div>`;
+      <div style="font-size:36px;margin-bottom:8px;">🎾</div>Create or join a tournament to get started</div>`;
     return;
   }
   const active=myTournaments.filter(t=>t.status!=='completed');
   const done=myTournaments.filter(t=>t.status==='completed');
   let html='';
-  if(active.length){
-    html+=`<div class="sec" style="margin-top:4px;">Active Tournaments</div>`;
-    active.forEach(t=>{ html+=tournCard(t); });
-  }
-  if(done.length){
-    html+=`<div class="sec">Completed</div>`;
-    done.forEach(t=>{ html+=tournCard(t); });
-  }
+  if(active.length){html+=`<div class="sec" style="margin-top:4px;">Active Tournaments</div>`;active.forEach(t=>{html+=tournCard(t);});}
+  if(done.length){html+=`<div class="sec">Completed</div>`;done.forEach(t=>{html+=tournCard(t);});}
   el.innerHTML=html;
 }
 
@@ -424,14 +621,14 @@ function tournCard(t){
 }
 
 async function reopenTournament(code){
-  const btn=document.querySelector(`[onclick="reopenTournament('${code}')"]`);
-  if(btn) btn.style.opacity='0.5';
+  const card=document.querySelector(`[onclick="reopenTournament('${code}')"]`);
+  if(card) card.style.opacity='0.5';
   const data=await fbLoadT(code);
-  if(btn) btn.style.opacity='1';
+  if(card) card.style.opacity='1';
   if(!data){toast('Tournament not found',true);return;}
-  T=data; openTournament();
+  T=data;openTournament();
 }
-renderHomeAcct();
+// Home rendered by auth-ready event
 
 // ═══════════════════════════════════
 //  ACCOUNT SCREEN
@@ -439,6 +636,7 @@ renderHomeAcct();
 function renderAccountScreen(){
   const el=document.getElementById('acct-body');
   if(currentUser){
+    // Fully registered user
     el.innerHTML=`
       <div class="tab-bar" style="position:relative;transform:none;left:auto;bottom:auto;border-top:none;border-bottom:1px solid var(--border);margin-bottom:0;">
         <button class="tab-btn active" id="atab-me" onclick="switchAcctTab('me')"><span class="tab-icon">👤</span>My Profile</button>
@@ -447,75 +645,152 @@ function renderAccountScreen(){
       <div id="acct-pane-me" style="padding:0 0 90px;"></div>
       <div id="acct-pane-global" style="padding:0 0 90px;display:none;"></div>`;
     renderAcctMe();
+  } else if(_pendingGoogleUser){
+    // Google auth succeeded but no username set yet → username setup
+    renderUsernameSetup(el);
   } else {
+    // Not signed in
     el.innerHTML=`
-      <div id="acct-tabs" style="display:flex;gap:8px;margin-bottom:20px;">
-        <button class="btn btn-primary btn-sm" id="atab-si" onclick="showAuthTab('signin')" style="flex:1;">Sign In</button>
-        <button class="btn btn-secondary btn-sm" id="atab-reg" onclick="showAuthTab('register')" style="flex:1;">Register</button>
-      </div>
-      <div id="auth-form"></div>`;
-    showAuthTab('signin');
+      <div style="padding:24px 16px 0;">
+        <!-- Migration notice for old accounts -->
+        <div style="background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+          <div style="font-size:13px;font-weight:700;color:var(--accent3);margin-bottom:5px;">👋 App updated to Google Sign-In</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.6;">Old username/password accounts are no longer supported. Sign in with Google to create a new account — your tournament history will carry forward once you play.</div>
+        </div>
+        <!-- Google sign-in button -->
+        <button class="btn btn-google" onclick="doGoogleSignIn()">
+          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-3.58-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+          Continue with Google
+        </button>
+        <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px;">Your Google account is only used for sign-in.<br>Choose any username after signing in.</div>
+      </div>`;
   }
 }
 
-function showAuthTab(tab){
-  const el=document.getElementById('auth-form');if(!el)return;
-  document.getElementById('atab-si').className=`btn btn-sm ${tab==='signin'?'btn-primary':'btn-secondary'}`;
-  document.getElementById('atab-reg').className=`btn btn-sm ${tab==='register'?'btn-primary':'btn-secondary'}`;
-  const pwField=`<div class="fg"><label>Password</label><div style="position:relative;">
-    <input id="ap" type="password" placeholder="••••••" style="padding-right:48px;"/>
-    <button type="button" onclick="togglePw()" id="pw-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--muted);padding:0;line-height:1;">👁</button>
-  </div></div>`;
-  if(tab==='signin'){
-    el.innerHTML=`<div class="card">
-      <div class="fg"><label>Username</label><input id="au" type="text" placeholder="your username" autocapitalize="none"/></div>
-      ${pwField}
-      <button class="btn btn-primary" onclick="doSignIn()">SIGN IN</button>
-    </div>`;
-  } else {
-    el.innerHTML=`<div class="card">
-      <div class="fg"><label>Username</label><input id="au" type="text" placeholder="choose a username" autocapitalize="none"/></div>
-      ${pwField}
-      <div class="fg"><label>Legacy Points (optional)</label>
-        <input id="alp" type="number" placeholder="0"/>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Points earned in tournaments before using this app</div>
+function renderUsernameSetup(el){
+  const gu = _pendingGoogleUser;
+  // Pre-fill a sensible username suggestion from Google display name
+  const suggested = (gu.displayName||'player').toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,20) || 'player';
+  el.innerHTML=`
+    <div style="padding:24px 16px 0;">
+      <!-- Google avatar + name -->
+      <div style="text-align:center;margin-bottom:20px;">
+        ${gu.photoURL?`<img src="${gu.photoURL}" style="width:64px;height:64px;border-radius:50%;border:3px solid var(--accent);display:block;margin:0 auto 10px;"/>`
+          :`<div style="width:64px;height:64px;border-radius:50%;background:rgba(0,229,160,0.1);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 10px;">👤</div>`}
+        <div style="font-size:15px;font-weight:700;">${gu.displayName||'Google User'}</div>
+        <div style="font-size:12px;color:var(--muted);">${gu.email}</div>
       </div>
-      <button class="btn btn-primary" onclick="doRegister()">CREATE ACCOUNT</button>
+
+      <div style="background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px;">One more step — choose your username</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;">This is your public name in the app. It also links your name in tournament player lists to this account.</div>
+      </div>
+
+      <!-- Username field -->
+      <div class="fg">
+        <label>Username</label>
+        <input id="setup-username" type="text" value="${suggested}" autocapitalize="none" autocorrect="off" spellcheck="false" oninput="onSetupUsernameInput()"
+          style="font-size:18px;font-weight:700;letter-spacing:1px;"/>
+        <div id="setup-un-help" style="margin-top:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+          <div id="setup-rule-chars" style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-bottom:5px;">
+            <span id="setup-icon-chars" style="font-size:14px;">○</span>Only letters (a–z), numbers, and underscores _
+          </div>
+          <div id="setup-rule-len" style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);">
+            <span id="setup-icon-len" style="font-size:14px;">○</span>Between 3 and 30 characters
+          </div>
+        </div>
+      </div>
+
+      <!-- Display name for tournament linking -->
+      <div class="fg">
+        <label>Tournament Display Name <span style="color:var(--muted);font-weight:400;font-size:10px;letter-spacing:0;">(optional)</span></label>
+        <input id="setup-displayname" type="text" placeholder="e.g. Carlos"/>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5;">Enter this <strong style="color:var(--text);">exactly</strong> as you type your name in tournament player lists — it auto-links results to your profile.</div>
+      </div>
+
+      <!-- Legacy points -->
+      <div class="fg">
+        <label>Legacy Points <span style="color:var(--muted);font-weight:400;font-size:10px;letter-spacing:0;">(optional)</span></label>
+        <input id="setup-legacy" type="number" placeholder="0" min="0"/>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Points earned before using this app</div>
+      </div>
+
+      <button class="btn btn-primary" id="setup-btn" onclick="doCompleteSetup()">FINISH SETUP →</button>
+      <button onclick="doGoogleSignOut()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:8px 0;">← Use a different Google account</button>
     </div>`;
+  // Trigger initial validation
+  onSetupUsernameInput();
+}
+
+function onSetupUsernameInput(){
+  const val=(document.getElementById('setup-username')||{}).value||'';
+  const charsOk=/^[a-z0-9_]+$/i.test(val)&&val.length>0;
+  const lenOk=val.length>=3&&val.length<=30;
+  setRule('setup-icon-chars','setup-rule-chars',charsOk);
+  setRule('setup-icon-len','setup-rule-len',lenOk);
+}
+
+async function doCompleteSetup(){
+  const gu=_pendingGoogleUser; if(!gu){toast('Sign in error — try again',true);return;}
+  const username=(document.getElementById('setup-username').value||'').trim().toLowerCase().replace(/\s+/g,'_');
+  const displayName=(document.getElementById('setup-displayname').value||'').trim();
+  const legacy=parseInt(document.getElementById('setup-legacy').value)||0;
+  if(!username){toast('Enter a username',true);return;}
+  if(!/^[a-z0-9_]{3,30}$/.test(username)){toast('Username: 3–30 chars, letters/numbers/_ only',true);return;}
+  if(!navigator.onLine){toast('No internet connection',true);return;}
+  const btn=document.getElementById('setup-btn');
+  btn.textContent='Saving…';btn.disabled=true;
+  try{
+    // Check username not taken
+    const all=await window._fbGet('players');
+    if(all&&Object.values(all).some(p=>p.username===username&&!p.redirectTo)){
+      toast('Username already taken',true);btn.textContent='FINISH SETUP →';btn.disabled=false;return;
+    }
+    const profile={
+      uid:gu.uid, username, email:gu.email,
+      displayName: displayName||username,
+      googleDisplayName: gu.displayName||'',
+      photoURL: gu.photoURL||null,
+      joinedAt: new Date().toISOString(),
+      legacy_points: legacy,
+      tournaments:[]
+    };
+    await window._fbSet(`players/${gu.uid}`, profile);
+    currentUser=profile;
+    _pendingGoogleUser=null;
+    renderAccountScreen();renderHomeAcct();
+    toast(`Welcome, ${username}! 🎾`);
+  }catch(e){
+    toast('Setup failed — try again',true);
+    btn.textContent='FINISH SETUP →';btn.disabled=false;
   }
 }
 
-async function doSignIn(){
-  const username=document.getElementById('au').value.trim().toLowerCase();
-  const pass=document.getElementById('ap').value;
-  if(!username||!pass){toast('Fill in all fields',true);return;}
-  const btn=document.querySelector('#auth-form .btn-primary');
-  btn.textContent='Signing in…';btn.disabled=true;
-  const player=await fbLoadP(username);
-  btn.textContent='SIGN IN';btn.disabled=false;
-  if(!player){toast('Account not found',true);return;}
-  if(player.passwordHash!==hashPw(pass)){toast('Wrong password',true);return;}
-  saveSess(player);renderAccountScreen();renderHomeAcct();toast(`Welcome back, ${player.username}! 👋`);
+async function doGoogleSignIn(){
+  if(!navigator.onLine){toast('No internet connection',true);return;}
+  try{
+    await window._authSignInGoogle();
+    // onAuthStateChanged fires → auth-ready event handles the rest
+  }catch(e){
+    if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request') return;
+    toast('Sign in failed — try again',true);
+  }
 }
 
-async function doRegister(){
-  const username=document.getElementById('au').value.trim().toLowerCase().replace(/\s+/g,'_');
-  const pass=document.getElementById('ap').value;
-  const legacy=parseInt(document.getElementById('alp').value)||0;
-  if(!username||!pass){toast('Fill in all fields',true);return;}
-  if(pass.length<4){toast('Password must be 4+ characters',true);return;}
-  if(!/^[a-z0-9_]+$/.test(username)){toast('Username: letters, numbers, _ only',true);return;}
-  const btn=document.querySelector('#auth-form .btn-primary');
-  btn.textContent='Creating…';btn.disabled=true;
-  const existing=await fbLoadP(username);
-  if(existing){btn.textContent='CREATE ACCOUNT';btn.disabled=false;toast('Username taken',true);return;}
-  const player={username,passwordHash:hashPw(pass),joinedAt:new Date().toISOString(),legacy_points:legacy,tournaments:[]};
-  await fbSaveP(player);
-  saveSess(player);btn.textContent='CREATE ACCOUNT';btn.disabled=false;
-  renderAccountScreen();renderHomeAcct();toast(`Welcome, ${username}! 🎾`);
+async function doGoogleSignOut(){
+  await window._authSignOut();
+  currentUser=null;_pendingGoogleUser=null;
+  renderAccountScreen();renderHomeAcct();
+  toast('Signed out');
 }
 
-function togglePw(){const inp=document.getElementById('ap');const btn=document.getElementById('pw-eye');if(!inp)return;if(inp.type==='password'){inp.type='text';btn.textContent='🙈';}else{inp.type='password';btn.textContent='👁';}}
+function setRule(iconId,rowId,pass){
+  const icon=document.getElementById(iconId),row=document.getElementById(rowId);
+  if(!icon||!row)return;
+  icon.textContent=pass?'✓':'○';
+  icon.style.color=pass?'var(--accent)':'var(--muted)';
+  row.style.color=pass?'var(--accent)':'var(--muted)';
+}
 
 function switchAcctTab(tab){
   ['me','global'].forEach(t=>{
@@ -526,51 +801,18 @@ function switchAcctTab(tab){
   if(tab==='global')renderGlobalRanking();
 }
 
-function renderAcctMe(){
-  const el=document.getElementById('acct-pane-me');if(!el)return;
-  const u=currentUser;
-  const avatarSrc=u.avatar?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:u.username[0].toUpperCase();
-
-  // username change cooldown
-  const lastChange=u.lastUsernameChange?new Date(u.lastUsernameChange):null;
-  const now=new Date();
-  const daysSince=lastChange?Math.floor((now-lastChange)/(1000*60*60*24)):999;
-  const canChange=daysSince>=14;
-  const daysLeft=14-daysSince;
-
-  el.innerHTML=`
-    <div style="text-align:center;padding:20px 16px 16px;">
-      <!-- avatar -->
-      <div style="position:relative;width:82px;margin:0 auto 12px;">
-        <div id="avatar-display" style="width:82px;height:82px;border-radius:50%;background:rgba(0,229,160,0.1);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:38px;color:var(--accent);overflow:hidden;">${avatarSrc}</div>
-        <label for="avatar-upload" style="position:absolute;bottom:0;right:0;width:26px;height:26px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:2px solid var(--bg);" title="Change photo">📷</label>
-        <input type="file" id="avatar-upload" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)"/>
-      </div>
-      <!-- username -->
-      <div id="username-display">
-        <div style="font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:2px;">${u.username}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">Member since ${fmtDate(u.joinedAt)}</div>
-        ${canChange
-          ?`<button onclick="showUsernameEdit()" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:50px;font-size:12px;font-weight:600;cursor:pointer;">✏️ Change username</button>`
-          :`<div style="margin-top:8px;font-size:11px;color:var(--muted);">Username change available in <strong style="color:var(--accent3);">${daysLeft} day${daysLeft!==1?'s':''}</strong></div>`
-        }
-      </div>
-      <div id="username-edit" style="display:none;margin-top:10px;">
-        <div style="position:relative;margin-bottom:8px;">
-          <input id="new-username-inp" type="text" placeholder="new username" autocapitalize="none"
-            style="width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;color:var(--text);font-size:15px;outline:none;text-align:center;"/>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="doUsernameChange()">Save</button>
-          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="hideUsernameEdit()">Cancel</button>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;">After changing, you can change again in 14 days</div>
-      </div>
-    </div>
-    <div style="padding:0 16px;">
-      <button class="btn btn-primary" style="margin-bottom:10px;" onclick="viewMyProfile()">📊 View Full Profile & History</button>
-      <button class="btn btn-danger" onclick="doLogout()">Sign Out</button>
-    </div>`;
+function showDisplayNameEdit(){
+  document.getElementById('display-name-edit').style.display='block';
+}
+async function doDisplayNameChange(){
+  const val=document.getElementById('new-display-inp').value.trim();
+  if(!val){toast('Enter a display name',true);return;}
+  const updated={...currentUser,displayName:val};
+  const ok=await fbSaveP(updated);
+  if(!ok)return;
+  document.getElementById('display-name-edit').style.display='none';
+  renderAcctMe();
+  toast(`Display name set to "${val}" ✓`);
 }
 
 function showUsernameEdit(){
@@ -591,35 +833,29 @@ async function doUsernameChange(){
   if(newName===currentUser.username){hideUsernameEdit();return;}
   const btn=document.querySelector('#username-edit .btn-primary');
   btn.textContent='Saving…';btn.disabled=true;
-  // check not taken
-  const existing=await fbLoadP(newName);
-  if(existing){btn.textContent='Save';btn.disabled=false;toast('Username already taken',true);return;}
-  // save new, delete old key by setting new entry, mark old as redirecting
-  const oldUsername=currentUser.username;
+  // Check not taken
+  const allPlayers=await window._fbGet('players');
+  if(allPlayers&&Object.values(allPlayers).some(p=>p.username===newName&&!p.redirectTo)){
+    btn.textContent='Save';btn.disabled=false;toast('Username already taken',true);return;
+  }
   const updated={...currentUser,username:newName,lastUsernameChange:new Date().toISOString()};
-  await window._fbSet(`players/${newName}`,updated);
-  // leave a redirect stub so old tournament refs still resolve
-  await window._fbSet(`players/${oldUsername}`,{redirectTo:newName,username:oldUsername});
-  saveSess(updated);
+  const ok=await fbSaveP(updated); // saves under UID, sets currentUser
   btn.textContent='Save';btn.disabled=false;
+  if(!ok)return;
   renderAcctMe();renderHomeAcct();
   toast(`Username changed to ${newName} ✓`);
 }
 
 function handleAvatarUpload(e){
   const file=e.target.files[0];if(!file)return;
-  // validate size — max 200KB original, we compress to ~80x80px JPEG
-  const MAX_BYTES=500*1024;
-  if(file.size>MAX_BYTES*5){toast('Image too large (max ~2MB)',true);return;}
+  if(file.size>5*1024*1024){toast('Image too large (max 5MB)',true);return;}
   const reader=new FileReader();
   reader.onload=ev=>{
     const img=new Image();
     img.onload=()=>{
-      // compress to 80×80px — small enough for 50 players stored in Firebase
       const canvas=document.createElement('canvas');
       canvas.width=80;canvas.height=80;
       const ctx=canvas.getContext('2d');
-      // centre-crop
       const size=Math.min(img.width,img.height);
       const sx=(img.width-size)/2,sy=(img.height-size)/2;
       ctx.drawImage(img,sx,sy,size,size,0,0,80,80);
@@ -635,8 +871,6 @@ async function saveAvatar(dataUrl){
   const updated={...currentUser,avatar:dataUrl};
   const ok=await fbSaveP(updated);
   if(!ok)return;
-  saveSess(updated);
-  // update display
   const disp=document.getElementById('avatar-display');
   if(disp)disp.innerHTML=`<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`;
   renderHomeAcct();
@@ -646,36 +880,31 @@ async function saveAvatar(dataUrl){
 async function renderGlobalRanking(){
   const el=document.getElementById('acct-pane-global');if(!el)return;
   el.innerHTML=`<div style="padding:16px;"><div class="spinner"></div></div>`;
+  if(!navigator.onLine){el.innerHTML=`<div class="empty"><div class="ei">📡</div>No internet connection</div>`;return;}
   let allPlayers=[];
   try{
     const data=await window._fbGet('players');
-    if(data) allPlayers=Object.values(data);
+    if(data) allPlayers=Object.entries(data)
+      .filter(([,p])=>p.username&&!p.redirectTo)
+      .map(([uid,p])=>({...p,uid}));
   }catch(e){el.innerHTML=`<div class="empty"><div class="ei">⚠️</div>Could not load rankings</div>`;return;}
-
   if(!allPlayers.length){el.innerHTML=`<div class="empty"><div class="ei">🌍</div>No players registered yet</div>`;return;}
-
-  // compute global score per player
   const ranked=allPlayers.map(p=>{
     const history=p.tournaments||[];
     let pts=p.legacy_points||0,wins=0,losses=0,played=0;
     history.forEach(th=>{pts+=th.points||0;wins+=th.wins||0;losses+=th.losses||0;played+=th.played||0;});
-    const winRate=played>0?Math.round(wins/(wins+losses||1)*100):0;
-    return{username:p.username,pts,wins,losses,played,winRate,tourneys:history.length};
+    return{uid:p.uid,username:p.username,pts,wins,losses,played,avatar:p.avatar||null};
   }).sort((a,b)=>b.pts-a.pts||b.wins-a.wins);
-
   const maxPts=ranked.length&&ranked[0].pts>0?ranked[0].pts:1;
   const medals=['🥇','🥈','🥉'];
-
-  let html=`<div style="padding:0 16px;">
-    <div class="sec">All-Time Leaderboard</div>
+  let html=`<div style="padding:0 16px;"><div class="sec">All-Time Leaderboard</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${ranked.length} registered players · tap to view profile</div>`;
-
   ranked.forEach((p,i)=>{
     const pct=Math.round(p.pts/maxPts*100);
-    const isMe=currentUser&&currentUser.username===p.username;
+    const isMe=currentUser&&currentUser.uid===p.uid;
     const medal=medals[i]||(i+1);
     const avatarInner=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`<span style="font-family:'Bebas Neue',cursive;font-size:15px;color:var(--accent);">${p.username[0].toUpperCase()}</span>`;
-    html+=`<div onclick="viewGlobalProfile('${p.username}')" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:8px;cursor:pointer;">
+    html+=`<div onclick="openProfileByUid('${p.uid}','account')" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:8px;cursor:pointer;">
       <div style="font-family:'Bebas Neue',cursive;font-size:${i<3?'22':'18'}px;min-width:26px;text-align:center;color:${i===0?'var(--accent3)':i===1?'#aaa':i===2?'#cd7f32':'var(--muted)'};">${medal}</div>
       <div style="width:34px;height:34px;border-radius:50%;background:rgba(0,229,160,0.08);border:2px solid ${isMe?'var(--accent)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">${avatarInner}</div>
       <div style="flex:1;min-width:0;">
@@ -692,30 +921,34 @@ async function renderGlobalRanking(){
   el.innerHTML=html;
 }
 
-async function viewGlobalProfile(username){
-  profileBackTarget='account';
-  await openProfileScreen(username);
+async function openProfileByUid(uid, backTarget='ranking'){
+  profileBackTarget=backTarget;
+  await openProfileScreen(uid);
 }
-
-function doLogout(){clearSess();renderAccountScreen();renderHomeAcct();toast('Signed out');}
-async function viewMyProfile(){if(!currentUser)return;profileBackTarget='account';await openProfileScreen(currentUser.username);}
+async function viewGlobalProfile(uid){profileBackTarget='account';await openProfileScreen(uid);}
+async function viewMyProfile(){if(!currentUser)return;profileBackTarget='account';await openProfileScreen(currentUser.uid||currentUser.username);}
 
 // ═══════════════════════════════════
 //  PROFILE SCREEN
 // ═══════════════════════════════════
-async function openProfileScreen(username){
+async function openProfileScreen(uidOrUsername){
   document.getElementById('profile-body').innerHTML=`<div class="spinner"></div>`;
   show('s-profile');
-  const player=await fbLoadP(username);
+  if(!navigator.onLine){
+    document.getElementById('profile-body').innerHTML=`<div class="empty"><div class="ei">📡</div>No internet connection</div>`;return;
+  }
+  // Try direct UID lookup first, fall back to username scan
+  let player = await window._fbGet(`players/${uidOrUsername}`);
+  if(!player || player.redirectTo){
+    player = await fbLoadP(uidOrUsername); // username scan fallback
+  }
   if(!player){document.getElementById('profile-body').innerHTML=`<div class="empty"><div class="ei">👤</div>Profile not found</div>`;return;}
-
   let totalPts=player.legacy_points||0,totalWins=0,totalLosses=0,totalPlayed=0;
   const history=player.tournaments||[];
   history.forEach(th=>{totalPts+=th.points||0;totalWins+=th.wins||0;totalLosses+=th.losses||0;totalPlayed+=th.played||0;});
   const winRate=totalPlayed>0?Math.round(totalWins/(totalWins+totalLosses||1)*100):0;
   const avg=totalPlayed>0?(totalPts/totalPlayed).toFixed(1):0;
-  const isMe=currentUser&&currentUser.username===username;
-
+  const isMe=currentUser&&(currentUser.uid===player.uid||currentUser.username===player.username);
   let histHTML='';
   if(history.length){
     const sorted=[...history].reverse();
@@ -743,7 +976,6 @@ async function openProfileScreen(username){
             </div>
             <div style="font-size:18px;flex-shrink:0;color:var(--muted);transition:transform 0.2s;" id="hist-chevron-${idx}">›</div>
           </div>
-          <!-- collapsed summary -->
           <div style="display:flex;gap:10px;margin-top:10px;">
             <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
               <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:${rankColor};">${rankMedal||rankStr}</div>
@@ -762,7 +994,6 @@ async function openProfileScreen(username){
               <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Matches</div>
             </div>
           </div>
-          <!-- expandable round breakdown -->
           <div id="hist-detail-${idx}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
             ${dots?`<div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Round Scores</div>
             <div style="display:flex;gap:4px;margin-bottom:6px;">${dots}</div>`:''}
@@ -780,7 +1011,6 @@ async function openProfileScreen(username){
   } else {
     histHTML=`<div class="empty"><div class="ei">🎾</div>No tournaments recorded yet.<br><span style="font-size:12px;">Finish a tournament to see it here!</span></div>`;
   }
-
   const avatarContent=player.avatar?`<img src="${player.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:player.username[0].toUpperCase();
   document.getElementById('profile-body').innerHTML=`
     <div style="background:linear-gradient(180deg,var(--surface),transparent);padding:20px 20px 16px;text-align:center;">
@@ -829,15 +1059,18 @@ function checkBye(){
   const ppg=parseInt(document.getElementById('s-ppg').value);
   const courts=Math.floor(n/4),byes=n-courts*4;
   const sec=document.getElementById('bye-section');
-  if(byes>0){sec.style.display='block';document.getElementById('bye-notice-txt').textContent=`⚠ With ${n} players, ${byes} player${byes>1?'s':''} sit out each round.`;document.getElementById('bye-half-pts').textContent=`${Math.round(ppg/2)} pts`;}
-  else sec.style.display='none';
+  if(byes>0){
+    sec.style.display='block';
+    document.getElementById('bye-notice-txt').textContent=`⚠ With ${n} players, ${byes} player${byes>1?'s':''} sit out each round.`;
+    document.getElementById('bye-half-pts').textContent=`${Math.round(ppg/2)} pts`;
+  } else sec.style.display='none';
 }
 document.getElementById('s-ppg').addEventListener('change',checkBye);
 document.getElementById('s-nplayers').addEventListener('change',checkBye);
 function selBye(o){byeChoice=o;document.getElementById('bye-half').classList.toggle('sel',o==='half');document.getElementById('bye-zero').classList.toggle('sel',o==='zero');}
 
 // ═══════════════════════════════════
-//  SCHEDULE
+//  SCHEDULE GENERATION
 // ═══════════════════════════════════
 function generateSchedule(players,numRounds){
   const n=players.length,courts=Math.floor(n/4),ppr=courts*4,rounds=[];let byePool=[];
@@ -858,6 +1091,7 @@ function generateSchedule(players,numRounds){
 //  CREATE / JOIN
 // ═══════════════════════════════════
 async function createTournament(){
+  if(!navigator.onLine){toast('No internet connection',true);return;}
   const name=document.getElementById('s-name').value.trim()||'Americano Tournament';
   const ppg=parseInt(document.getElementById('s-ppg').value);
   const numRounds=parseInt(document.getElementById('s-rounds').value);
@@ -865,10 +1099,13 @@ async function createTournament(){
   const players=Array.from(inputs).map((inp,i)=>inp.value.trim()||`Player ${i+1}`);
   if(players.length<4){toast('Need at least 4 players',true);return;}
   const code=Math.random().toString(36).slice(2,7).toUpperCase();
-  T={code,name,pointsPerGame:ppg,players,rounds:generateSchedule(players,numRounds),byeOption:players.length%4!==0?byeChoice:null,createdAt:new Date().toISOString()};
+  T={code,name,pointsPerGame:ppg,players,rounds:generateSchedule(players,numRounds),
+     byeOption:players.length%4!==0?byeChoice:null,createdAt:new Date().toISOString(),
+     createdBy:currentUser?currentUser.username:null};
   const btn=document.querySelector('#s-setup .btn-primary');btn.textContent='Saving…';btn.disabled=true;
   const ok=await fbSaveT(T);btn.textContent='START & SHARE 🎾';btn.disabled=false;
-  if(!ok)return;T.createdBy=currentUser?currentUser.username:null;await fbSaveT(T);upsertMyTournament(T,true);openTournament();toast(`Created! Code: ${T.code}`);
+  if(!ok)return;
+  upsertMyTournament(T,true);openTournament();toast(`Created! Code: ${T.code}`);
 }
 
 async function doJoin(){
@@ -886,7 +1123,10 @@ async function doJoin(){
 function openTournament(){show('s-tourn');switchTab('rounds');renderTournament();waitFb(()=>fbListenT(T.code));}
 function switchTab(tab){
   activeTab=tab;
-  ['rounds','ranking','partners'].forEach(t=>{document.getElementById(`pane-${t}`).style.display=t===tab?'block':'none';document.getElementById(`tab-${t}`).classList.toggle('active',t===tab);});
+  ['rounds','ranking','partners'].forEach(t=>{
+    document.getElementById(`pane-${t}`).style.display=t===tab?'block':'none';
+    document.getElementById(`tab-${t}`).classList.toggle('active',t===tab);
+  });
   renderTab(tab);
 }
 function renderTournament(){renderTopBar();renderTab(activeTab);}
@@ -898,16 +1138,21 @@ function renderTopBar(){
   const pct=totalM?Math.round(savedM/totalM*100):0;
   const isCreator=!!(currentUser&&T.createdBy&&currentUser.username===T.createdBy);
   const isCompleted=T.status==='completed';
+  const isOffline=!navigator.onLine;
   document.getElementById('tourn-topbar').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-      <div><button onclick="goHome()" class="back-btn" style="position:static;margin-bottom:6px;display:inline-block;">← Home</button>
+      <div>
+        <button onclick="goHome()" class="back-btn" style="position:static;margin-bottom:6px;display:inline-block;">← Home</button>
         <div style="font-weight:700;font-size:17px;">${T.name}</div>
         <div style="color:var(--muted);font-size:12px;">${T.players.length} players · ${T.pointsPerGame}pts · ${T.rounds.length} rounds</div>
       </div>
       <div style="text-align:right;">
         <div style="font-family:'Bebas Neue',cursive;font-size:28px;color:var(--accent);line-height:1;">${pct}%</div>
         <div style="color:var(--muted);font-size:11px;">${savedM}/${totalM} played</div>
-        <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:2px;"><div class="sync-dot"></div><span style="font-size:10px;color:var(--muted);">Live</span></div>
+        <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:2px;">
+          <div class="sync-dot${isOffline?' offline':''}"></div>
+          <span style="font-size:10px;color:var(--muted);">${isOffline?'Offline':'Live'}</span>
+        </div>
       </div>
     </div>
     <div class="prog-wrap"><div class="prog-fill" style="width:${pct}%"></div></div>
@@ -915,11 +1160,19 @@ function renderTopBar(){
       <div><div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:2px;">Share Code</div><div class="share-code">${T.code}</div></div>
       <button class="copy-btn" id="copy-btn" onclick="copyCode()">📋 Copy</button>
     </div>
-    ${isCompleted?`<div style="background:rgba(107,127,163,0.1);border:1px solid var(--border);border-radius:10px;padding:8px 14px;text-align:center;margin-bottom:8px;font-size:12px;color:var(--muted);">✅ Tournament Completed</div>`
-      :isCreator?`<button onclick="markTournamentComplete()" style="width:100%;margin-bottom:8px;padding:10px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:10px;color:var(--accent3);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.5px;">🏁 Mark as Complete</button>`
-      :''}`;
+    ${isCompleted
+      ?`<div style="background:rgba(107,127,163,0.1);border:1px solid var(--border);border-radius:10px;padding:8px 14px;text-align:center;margin-bottom:8px;font-size:12px;color:var(--muted);">✅ Tournament Completed</div>`
+      :isCreator
+        ?`<button onclick="markTournamentComplete()" style="width:100%;margin-bottom:8px;padding:10px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:10px;color:var(--accent3);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.5px;">🏁 Mark as Complete</button>`
+        :''}`;
 }
-function copyCode(){navigator.clipboard.writeText(T.code).catch(()=>{});const btn=document.getElementById('copy-btn');if(!btn)return;btn.textContent='✓ Copied!';btn.classList.add('done');setTimeout(()=>{btn.textContent='📋 Copy';btn.classList.remove('done');},2000);}
+
+function copyCode(){
+  navigator.clipboard.writeText(T.code).catch(()=>{});
+  const btn=document.getElementById('copy-btn');if(!btn)return;
+  btn.textContent='✓ Copied!';btn.classList.add('done');
+  setTimeout(()=>{btn.textContent='📋 Copy';btn.classList.remove('done');},2000);
+}
 
 // ═══════════════════════════════════
 //  ROUNDS
@@ -932,8 +1185,12 @@ function renderRounds(){
     const div=document.createElement('div');
     div.style.cssText='margin:10px 16px 0;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;';
     let byeHTML='';
-    if(round.byes&&round.byes.length)byeHTML=`<div style="background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.2);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--accent3);">🪑 Sitting out: <strong>${round.byes.join(', ')}</strong> · +${byePts} pts</div>`;
-    div.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-weight:700;font-size:16px;">Round ${ri+1}</div><div class="round-badge">${allSaved?'✓ Complete':`${round.matches.length} Court${round.matches.length>1?'s':''}`}</div></div>${byeHTML}<div id="matches-${ri}"></div>`;
+    if(round.byes&&round.byes.length)
+      byeHTML=`<div style="background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.2);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--accent3);">🪑 Sitting out: <strong>${round.byes.join(', ')}</strong> · +${byePts} pts</div>`;
+    div.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-weight:700;font-size:16px;">Round ${ri+1}</div>
+      <div class="round-badge">${allSaved?'✓ Complete':`${round.matches.length} Court${round.matches.length>1?'s':''}`}</div>
+    </div>${byeHTML}<div id="matches-${ri}"></div>`;
     pane.appendChild(div);
     round.matches.forEach((_,mi)=>renderMatch(ri,mi));
   });
@@ -959,12 +1216,10 @@ function renderMatch(ri,mi){
     const hasScore=match.scoreA!==null||match.scoreB!==null;
     const isCompleted=T.status==='completed';
     if(isCompleted){
-      // completed tournament — show placeholder dash
       div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
         <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
         <div style="text-align:center;padding:6px 0;font-size:13px;color:var(--muted);">— not recorded —</div>`;
     } else if(!hasScore){
-      // blank state — just show teams and a tap-to-enter button
       div.innerHTML=`<div class="court-lbl">Court ${mi+1}</div>
         <div class="teams-row"><div class="team">${match.teamA.map(p=>`<span class="pname">${p}</span>`).join('')}</div><div class="vs-lbl">VS</div><div class="team">${match.teamB.map(p=>`<span class="pname">${p}</span>`).join('')}</div></div>
         <button class="enter-score-btn" onclick="openScoreEntry(${ri},${mi})">+ Enter Score</button>`;
@@ -987,23 +1242,8 @@ function renderMatch(ri,mi){
   container.appendChild(div);
 }
 
-// ═══════════════════════════════════
-//  SCORE ENTRY OPEN/CLEAR
-// ═══════════════════════════════════
-function openScoreEntry(ri,mi){
-  // use a sentinel value — inputs will show placeholder "0" but be visually blank
-  T.rounds[ri].matches[mi].scoreA=0;
-  T.rounds[ri].matches[mi].scoreB=0;
-  renderMatch(ri,mi);
-  const el=document.getElementById(`sA-${ri}-${mi}`);
-  if(el){el.value='';el.focus();}
-}
-function clearScoreEntry(ri,mi){
-  // reset back to blank
-  T.rounds[ri].matches[mi].scoreA=null;
-  T.rounds[ri].matches[mi].scoreB=null;
-  renderMatch(ri,mi);
-}
+function openScoreEntry(ri,mi){T.rounds[ri].matches[mi].scoreA=0;T.rounds[ri].matches[mi].scoreB=0;renderMatch(ri,mi);const el=document.getElementById(`sA-${ri}-${mi}`);if(el){el.value='';el.focus();}}
+function clearScoreEntry(ri,mi){T.rounds[ri].matches[mi].scoreA=null;T.rounds[ri].matches[mi].scoreB=null;renderMatch(ri,mi);}
 
 // ═══════════════════════════════════
 //  SCORE LOGIC
@@ -1013,14 +1253,6 @@ function updateHint(ri,mi){
   const hint=document.getElementById(`hint-${ri}-${mi}`);
   if(hint){hint.className=`score-hint${over?' over':''}`;hint.textContent=over?`⚠ Total ${tot} exceeds ${ppg} max`:`${tot} / ${ppg} pts · ${ppg-tot} left`;}
   [document.getElementById(`sA-${ri}-${mi}`),document.getElementById(`sB-${ri}-${mi}`)].forEach(el=>{if(el)el.classList.toggle('over',over);});
-}
-function adj(ri,mi,team,delta){
-  const m=T.rounds[ri].matches[mi],ppg=T.pointsPerGame;
-  if(m.scoreA===null)m.scoreA=0;if(m.scoreB===null)m.scoreB=0;
-  const key=team==='A'?'scoreA':'scoreB',other=team==='A'?'scoreB':'scoreA';
-  m[key]=Math.max(0,m[key]+delta);if(m[key]+m[other]>ppg)m[other]=ppg-m[key];if(m[other]<0)m[other]=0;
-  const elA=document.getElementById(`sA-${ri}-${mi}`),elB=document.getElementById(`sB-${ri}-${mi}`);
-  if(elA)elA.value=m.scoreA;if(elB)elB.value=m.scoreB;updateHint(ri,mi);
 }
 function onInput(ri,mi,team){
   const m=T.rounds[ri].matches[mi],ppg=T.pointsPerGame,key=team==='A'?'scoreA':'scoreB',other=team==='A'?'scoreB':'scoreA',otherElId=team==='A'?`sB-${ri}-${mi}`:`sA-${ri}-${mi}`;
@@ -1042,7 +1274,6 @@ async function saveScore(ri,mi){
   m.scoreA=sA;m.scoreB=sB;m.saved=true;
   await fbSaveT(T);
   renderRounds();renderTopBar();toast('Score saved! 🎾');
-  // check if tournament is now fully complete
   const totalM=T.rounds.reduce((a,r)=>a+r.matches.length,0);
   const savedM=T.rounds.reduce((a,r)=>a+r.matches.filter(m=>m.saved).length,0);
   if(savedM===totalM) await commitTournamentToProfiles();
@@ -1050,57 +1281,66 @@ async function saveScore(ri,mi){
 async function editScore(ri,mi){T.rounds[ri].matches[mi].saved=false;await fbSaveT(T);renderRounds();renderTopBar();}
 
 async function markTournamentComplete(){
-  if(!confirm('Mark this tournament as complete? This will lock scoring and save results to player profiles.')) return;
-  T.status='completed';
-  T.completedAt=new Date().toISOString();
+  const confirmed=await showConfirm('Mark as Complete','This will lock scoring and save results to player profiles. Continue?','Complete 🏁');
+  if(!confirmed)return;
+  T.status='completed';T.completedAt=new Date().toISOString();
   await fbSaveT(T);
-  upsertMyTournament(T, true);
-  renderTopBar();
+  upsertMyTournament(T,true);renderTopBar();
   await commitTournamentToProfiles();
   toast('Tournament completed! Results saved 🏆');
 }
 
 // ═══════════════════════════════════
-//  COMMIT TOURNAMENT RESULTS TO PLAYER PROFILES
+//  COMMIT RESULTS TO PLAYER PROFILES
+//  Improved: matches on displayName AND username, with feedback
 // ═══════════════════════════════════
 async function commitTournamentToProfiles(){
+  if(!navigator.onLine) return;
   const standings=computeStandings();
-  for(const st of standings){
-    // try to find a player account — match by username (lowercase, spaces→_)
-    const guessedUsername=st.name.toLowerCase().replace(/\s+/g,'_');
-    let player=await fbLoadP(guessedUsername);
-    // also handle redirect stubs
-    if(player&&player.redirectTo) player=await fbLoadP(player.redirectTo);
-    if(!player) continue; // no account linked, skip
+  let linked=0, skipped=0;
 
+  let allPlayers={};
+  try{
+    const data=await window._fbGet('players');
+    if(data) allPlayers=data;
+  }catch(e){return;}
+
+  // Build lookup maps: displayName→{uid,profile}, username→{uid,profile}
+  const byDisplayName={}, byUsername={};
+  Object.entries(allPlayers).forEach(([uid,p])=>{
+    if(!p.username) return;
+    byUsername[p.username]={uid,p};
+    const dn=(p.displayName||p.username).toLowerCase().trim();
+    byDisplayName[dn]={uid,p};
+  });
+
+  for(const st of standings){
+    const nameNorm=st.name.toLowerCase().trim();
+    const usernameGuess=nameNorm.replace(/\s+/g,'_');
+    const match = byDisplayName[nameNorm] || byUsername[usernameGuess];
+    if(!match){skipped++;continue;}
+
+    const {uid, p:player} = match;
     const existing=player.tournaments||[];
-    // don't double-add same tournament
     if(existing.some(t=>t.code===T.code)) continue;
 
     const entry={
-      code:T.code,
-      name:T.name,
-      date:new Date().toISOString(),
-      points:st.points,
-      wins:st.wins,
-      losses:st.losses,
-      played:st.played,
-      rank:standings.indexOf(st)+1,
-      totalPlayers:standings.length,
-      roundScores:st.roundScores||[],
-      ppg:T.pointsPerGame
+      code:T.code, name:T.name,
+      date:T.completedAt||new Date().toISOString(),
+      points:st.points, wins:st.wins, losses:st.losses, played:st.played,
+      rank:standings.indexOf(st)+1, totalPlayers:standings.length,
+      roundScores:st.roundScores||[], ppg:T.pointsPerGame
     };
-
-    // keep last 10 only — oldest first so we slice from start
     const updated=[...existing,entry];
     if(updated.length>10) updated.splice(0,updated.length-10);
-
-    await fbSaveP({...player,tournaments:updated});
-    // refresh session if this is the logged-in user
-    if(currentUser&&currentUser.username===player.username){
-      saveSess({...currentUser,tournaments:updated});
-    }
+    const savedPlayer={...player,tournaments:updated};
+    await window._fbSet(`players/${uid}`, savedPlayer);
+    if(currentUser&&currentUser.uid===uid) currentUser=savedPlayer;
+    linked++;
   }
+
+  if(linked>0) toast(`Linked results to ${linked} player account${linked>1?'s':''}! 🔗`);
+  if(skipped>0 && linked===0) toast(`${skipped} players have no linked account`);
 }
 
 // ═══════════════════════════════════
@@ -1130,7 +1370,7 @@ function computeStandings(){
 }
 
 // ═══════════════════════════════════
-//  RANKING (OPTION A)
+//  RANKING
 // ═══════════════════════════════════
 function renderRanking(){
   const pane=document.getElementById('pane-ranking');
@@ -1139,16 +1379,26 @@ function renderRanking(){
   const totalM=T.rounds.reduce((a,r)=>a+r.matches.length,0);
   const savedM=T.rounds.reduce((a,r)=>a+r.matches.filter(m=>m.saved).length,0);
   const allDone=savedM===totalM&&totalM>0;
-
   if(standings.every(s=>s.played===0)){pane.innerHTML=`<div class="empty"><div class="ei">🏆</div>Play some matches to see the ranking!</div>`;return;}
+
+  // Link account banner — show to logged-in users whose display name might not be in tournament
+  let linkBanner='';
+  if(currentUser&&T.players){
+    const dn=(currentUser.displayName||currentUser.username).toLowerCase().trim();
+    const inTournament=T.players.some(p=>p.toLowerCase().trim()===dn||p.toLowerCase().replace(/\s+/g,'_')===currentUser.username);
+    if(!inTournament){
+      linkBanner=`<div class="link-banner" style="margin:10px 16px 0;">
+        <span>⚠ Your name isn't in this tournament — results won't auto-link to your account</span>
+      </div>`;
+    }
+  }
 
   let html=`<div class="lb-tabs">
     <div class="lb-tab ${lbTab==='points'?'on':''}" onclick="setLbTab('points')">Points</div>
     <div class="lb-tab ${lbTab==='winrate'?'on':''}" onclick="setLbTab('winrate')">Win Rate</div>
     <div class="lb-tab ${lbTab==='avg'?'on':''}" onclick="setLbTab('avg')">Avg/Match</div>
-  </div>`;
+  </div>${linkBanner}`;
 
-  // podium
   const top=standings.slice(0,Math.min(3,standings.length));
   const order=top.length>=3?[top[1],top[0],top[2]]:top.length===2?[top[1],top[0]]:[top[0]];
   const cls=top.length>=3?['p2','p1','p3']:top.length===2?['p2','p1']:['p1'];
@@ -1169,8 +1419,6 @@ function renderRanking(){
     </div>`;
   });
   html+=`</div>`;
-
-  // bars
   html+=`<div class="lb-section"><div class="lb-section-title">${lbTab==='points'?'Points per Player':lbTab==='winrate'?'Win Rate':'Avg Points / Match'}</div>`;
   standings.forEach((p,i)=>{
     const raw=lbTab==='points'?p.points:lbTab==='winrate'?(p.played?Math.round(p.wins/(p.wins+p.losses||1)*100):0):(p.played?(p.points/p.played):0);
@@ -1184,7 +1432,6 @@ function renderRanking(){
     </div>`;
   });
   html+=`</div>`;
-
   if(lbTab==='points'){
     html+=`<div class="lb-section"><div class="lb-section-title">Win / Loss</div>`;
     standings.slice(0,5).forEach(p=>{
@@ -1193,13 +1440,11 @@ function renderRanking(){
     });
     html+=`</div>`;
   }
-
   html+=`<div class="lb-footer">
     <div class="lb-footer-cell"><span class="fv">${T.rounds.length}</span><span class="fl">Rounds</span></div>
     <div class="lb-footer-cell"><span class="fv">${T.pointsPerGame}</span><span class="fl">Pts/Game</span></div>
     <div class="lb-footer-cell"><span class="fv">${T.players.length}</span><span class="fl">Players</span></div>
   </div>`;
-
   if(T.byeOption){
     const bp=Math.round(T.pointsPerGame/2);
     html+=`<div style="font-size:12px;color:var(--muted);text-align:center;padding:0 16px 16px;">${allDone?`✓ Bye bonus applied (+${bp}pts/missed round)`:`⏳ Bye bonus (+${bp}pts) added when all matches saved`}</div>`;
@@ -1211,10 +1456,23 @@ function setLbTab(tab){lbTab=tab;renderRanking();}
 
 async function onPlayerTap(name){
   profileBackTarget='ranking';
-  const username=name.toLowerCase().replace(/\s+/g,'_');
-  const player=await fbLoadP(username);
-  if(player){await openProfileScreen(username);}
-  else{showTournamentProfile(name);}
+  // Try to find a registered account matching this display name or username
+  if(navigator.onLine){
+    try{
+      const all=await window._fbGet('players');
+      if(all){
+        const nameNorm=name.toLowerCase().trim();
+        const entry=Object.entries(all).find(([uid,p])=>
+          !p.redirectTo&&(
+            (p.displayName||'').toLowerCase().trim()===nameNorm ||
+            (p.username||'').toLowerCase()===nameNorm.replace(/\s+/g,'_')
+          )
+        );
+        if(entry){await openProfileScreen(entry[0]);return;}
+      }
+    }catch(e){}
+  }
+  showTournamentProfile(name);
 }
 
 function showTournamentProfile(playerName){
@@ -1247,7 +1505,7 @@ function showTournamentProfile(playerName){
     <div style="padding:0 16px;">
       <div style="background:rgba(107,127,163,0.08);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
         <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">No account linked to this player name.</div>
-        <div style="font-size:12px;color:var(--accent);">Create an account at the home screen to track stats across all tournaments.</div>
+        <div style="font-size:12px;color:var(--accent);">Create an account and set your Display Name to match <strong>"${playerName}"</strong> to track stats across tournaments.</div>
       </div>
     </div>`;
   show('s-profile');
@@ -1283,103 +1541,78 @@ function renderPartners(){
 // ═══════════════════════════════════
 //  GLOBAL LEADERBOARD
 // ═══════════════════════════════════
-let globalLbTab = 'yearly';
-
+let globalLbTab='yearly';
 function renderLeaderboard(){
-  // render tabs immediately, then load data
-  const tabEl = document.getElementById('lb-global-tabs');
-  const bodyEl = document.getElementById('lb-global-body');
-  if(!tabEl||!bodyEl) return;
+  const tabEl=document.getElementById('lb-global-tabs');
+  const bodyEl=document.getElementById('lb-global-body');
+  if(!tabEl||!bodyEl)return;
   renderLbTabs();
-  bodyEl.innerHTML = `<div style="padding:40px 0;"><div class="spinner"></div></div>`;
+  bodyEl.innerHTML=`<div style="padding:40px 0;"><div class="spinner"></div></div>`;
   loadLeaderboardData();
 }
 
 function renderLbTabs(){
-  const tabEl = document.getElementById('lb-global-tabs');
-  if(!tabEl) return;
-  const now = new Date();
-  const yearLabel = now.getFullYear();
-  const monthLabel = now.toLocaleString('en-GB',{month:'long'});
-  tabEl.innerHTML = `
-    <div class="lb-tab ${globalLbTab==='yearly'?'on':''}" onclick="switchGlobalLbTab('yearly')" style="flex:1;text-align:center;">📅 ${yearLabel}</div>
-    <div class="lb-tab ${globalLbTab==='monthly'?'on':''}" onclick="switchGlobalLbTab('monthly')" style="flex:1;text-align:center;">🗓 ${monthLabel}</div>`;
+  const tabEl=document.getElementById('lb-global-tabs');if(!tabEl)return;
+  const now=new Date();
+  tabEl.innerHTML=`
+    <div class="lb-tab ${globalLbTab==='yearly'?'on':''}" onclick="switchGlobalLbTab('yearly')" style="flex:1;text-align:center;">📅 ${now.getFullYear()}</div>
+    <div class="lb-tab ${globalLbTab==='monthly'?'on':''}" onclick="switchGlobalLbTab('monthly')" style="flex:1;text-align:center;">🗓 ${now.toLocaleString('en-GB',{month:'long'})}</div>`;
 }
 
-function switchGlobalLbTab(tab){
-  globalLbTab = tab;
-  renderLbTabs();
-  renderLbBody(window._cachedLbPlayers||[]);
-}
+function switchGlobalLbTab(tab){globalLbTab=tab;renderLbTabs();renderLbBody(window._cachedLbPlayers||[]);}
 
 async function loadLeaderboardData(){
-  let allPlayers = [];
-  try{
-    const data = await window._fbGet('players');
-    if(data) allPlayers = Object.values(data).filter(p=>p.username&&!p.redirectTo);
-  } catch(e){
-    document.getElementById('lb-global-body').innerHTML=`<div class="empty"><div class="ei">⚠️</div>Could not load data</div>`;
-    return;
+  if(!navigator.onLine){
+    document.getElementById('lb-global-body').innerHTML=`<div class="empty"><div class="ei">📡</div>No internet connection</div>`;return;
   }
-  window._cachedLbPlayers = allPlayers;
+  let allPlayers=[];
+  try{
+    const data=await window._fbGet('players');
+    // Include uid so we can open profiles correctly
+    if(data) allPlayers=Object.entries(data)
+      .filter(([,p])=>p.username&&!p.redirectTo)
+      .map(([uid,p])=>({...p,uid}));
+  }catch(e){
+    document.getElementById('lb-global-body').innerHTML=`<div class="empty"><div class="ei">⚠️</div>Could not load data — check your connection</div>`;return;
+  }
+  window._cachedLbPlayers=allPlayers;
   renderLbBody(allPlayers);
 }
 
 function renderLbBody(allPlayers){
-  const bodyEl = document.getElementById('lb-global-body');
-  if(!bodyEl) return;
-
-  const now = new Date();
-  const thisYear = now.getFullYear();
-  const thisMonth = now.getMonth(); // 0-indexed
-
-  // build per-player score for selected period
-  const rows = allPlayers.map(p=>{
-    const history = p.tournaments||[];
-    let pts=0, wins=0, losses=0, played=0, count=0;
+  const bodyEl=document.getElementById('lb-global-body');if(!bodyEl)return;
+  const now=new Date();
+  const thisYear=now.getFullYear();
+  const thisMonth=now.getMonth();
+  const rows=allPlayers.map(p=>{
+    const history=p.tournaments||[];
+    let pts=0,wins=0,losses=0,played=0,count=0;
     history.forEach(th=>{
-      const d = th.date ? new Date(th.date) : null;
-      if(!d) return;
-      const matchYear = d.getFullYear();
-      const matchMonth = d.getMonth();
-      const inPeriod = globalLbTab==='yearly'
-        ? matchYear===thisYear
-        : matchYear===thisYear && matchMonth===thisMonth;
-      if(!inPeriod) return;
-      pts   += th.points||0;
-      wins  += th.wins||0;
-      losses+= th.losses||0;
-      played+= th.played||0;
-      count++;
+      const d=th.date?new Date(th.date):null;if(!d)return;
+      const inPeriod=globalLbTab==='yearly'?d.getFullYear()===thisYear:(d.getFullYear()===thisYear&&d.getMonth()===thisMonth);
+      if(!inPeriod)return;
+      pts+=th.points||0;wins+=th.wins||0;losses+=th.losses||0;played+=th.played||0;count++;
     });
-    // for yearly, also add legacy points if we're on yearly tab
-    if(globalLbTab==='yearly') pts += (p.legacy_points||0);
-    return { username:p.username, avatar:p.avatar||null, pts, wins, losses, played, count };
-  })
-  .filter(r=>r.count>0 || (globalLbTab==='yearly' && r.pts>0))
-  .sort((a,b)=>b.pts-a.pts||b.wins-a.wins);
+    if(globalLbTab==='yearly') pts+=(p.legacy_points||0);
+    return{uid:p.uid,username:p.username,avatar:p.avatar||null,pts,wins,losses,played,count};
+  }).filter(r=>r.count>0||(globalLbTab==='yearly'&&r.pts>0)).sort((a,b)=>b.pts-a.pts||b.wins-a.wins);
 
   if(!rows.length){
-    const period = globalLbTab==='yearly'?`${thisYear}`:`${now.toLocaleString('en-GB',{month:'long'})} ${thisYear}`;
-    bodyEl.innerHTML=`<div class="empty"><div class="ei">🎾</div>No tournament data for ${period} yet</div>`;
-    return;
+    const period=globalLbTab==='yearly'?`${thisYear}`:`${now.toLocaleString('en-GB',{month:'long'})} ${thisYear}`;
+    bodyEl.innerHTML=`<div class="empty"><div class="ei">🎾</div>No tournament data for ${period} yet</div>`;return;
   }
-
-  const maxPts = rows[0].pts||1;
-  const medals = ['🥇','🥈','🥉'];
-  const period = globalLbTab==='yearly'?`${thisYear}`:`${now.toLocaleString('en-GB',{month:'long',year:'numeric'})}`;
-
-  // ── podium top 3
-  const top = rows.slice(0,Math.min(3,rows.length));
-  const podOrder = top.length>=3?[top[1],top[0],top[2]]:top.length===2?[top[1],top[0]]:[top[0]];
-  const podCls   = top.length>=3?['p2','p1','p3']:top.length===2?['p2','p1']:['p1'];
-
-  let html = `<div class="podium-wrap">`;
+  const maxPts=rows[0].pts||1;
+  const medals=['🥇','🥈','🥉'];
+  const period=globalLbTab==='yearly'?`${thisYear}`:`${now.toLocaleString('en-GB',{month:'long',year:'numeric'})}`;
+  const top=rows.slice(0,Math.min(3,rows.length));
+  const podOrder=top.length>=3?[top[1],top[0],top[2]]:top.length===2?[top[1],top[0]]:[top[0]];
+  const podCls=top.length>=3?['p2','p1','p3']:top.length===2?['p2','p1']:['p1'];
+  let html=`<div class="podium-wrap">`;
   podOrder.forEach((p,i)=>{
     if(!p)return;
     const pc=podCls[i];
     const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`${p.username[0].toUpperCase()}`;
-    html+=`<div class="pod ${pc}" onclick="openLbProfile('${p.username}')">
+    html+=`<div class="pod ${pc}" onclick="openLbProfile('${p.uid}')">
       ${pc==='p1'?`<div style="font-size:20px;margin-bottom:4px;">${medals[0]}</div>`:''}
       <div class="pod-avatar" style="overflow:hidden;">${av}</div>
       <div class="pod-name">${p.username}</div>
@@ -1388,18 +1621,13 @@ function renderLbBody(allPlayers){
       <div class="pod-block"></div>
     </div>`;
   });
-  html+=`</div>`;
-
-  // ── full ranked list
-  html+=`<div class="lb-section">
-    <div class="lb-section-title">${period} · ${rows.length} Players</div>`;
-
+  html+=`</div><div class="lb-section"><div class="lb-section-title">${period} · ${rows.length} Players</div>`;
   rows.forEach((p,i)=>{
-    const pct = Math.round(p.pts/maxPts*100);
-    const isMe = currentUser&&currentUser.username===p.username;
-    const medal = medals[i]||null;
+    const pct=Math.round(p.pts/maxPts*100);
+    const isMe=currentUser&&currentUser.uid===p.uid;
+    const medal=medals[i]||null;
     const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`<span style="font-family:'Bebas Neue',cursive;font-size:13px;color:var(--accent);">${p.username[0].toUpperCase()}</span>`;
-    html+=`<div onclick="openLbProfile('${p.username}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:7px;cursor:pointer;">
+    html+=`<div onclick="openLbProfile('${p.uid}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:7px;cursor:pointer;">
       <div style="font-family:'Bebas Neue',cursive;font-size:${i<3?'20':'16'}px;min-width:24px;text-align:center;color:${i===0?'var(--accent3)':i===1?'#aaa':i===2?'#cd7f32':'var(--muted)'};">${medal||i+1}</div>
       <div style="width:34px;height:34px;border-radius:50%;background:rgba(0,229,160,0.08);border:2px solid ${isMe?'var(--accent)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">${av}</div>
       <div style="flex:1;min-width:0;">
@@ -1412,25 +1640,18 @@ function renderLbBody(allPlayers){
       </div>
     </div>`;
   });
-  html+=`</div>`;
-
-  // ── footer stats
-  html+=`<div class="lb-footer">
+  html+=`</div><div class="lb-footer">
     <div class="lb-footer-cell"><span class="fv">${rows.length}</span><span class="fl">Players</span></div>
     <div class="lb-footer-cell"><span class="fv">${rows.reduce((a,r)=>a+r.count,0)}</span><span class="fl">Tourneys</span></div>
     <div class="lb-footer-cell"><span class="fv">${rows.reduce((a,r)=>a+r.pts,0)}</span><span class="fl">Total Pts</span></div>
   </div>`;
-
-  bodyEl.innerHTML = html;
+  bodyEl.innerHTML=html;
 }
 
-async function openLbProfile(username){
-  profileBackTarget = 'leaderboard';
-  await openProfileScreen(username);
-}
+async function openLbProfile(uid){profileBackTarget='leaderboard';await openProfileScreen(uid);}
 
 // ═══════════════════════════════════
-//  TOURNAMENT HISTORY TOGGLE
+//  HISTORY TOGGLE
 // ═══════════════════════════════════
 function toggleHistEntry(idx){
   const detail=document.getElementById(`hist-detail-${idx}`);
@@ -1459,7 +1680,7 @@ function toast(msg,isErr=false){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='toast'+(isErr?' err':'');el.classList.add('show');
   if(toastTimer)clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>el.classList.remove('show'),2600);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2800);
 }
 </script>
 </body>
