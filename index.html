@@ -56,13 +56,18 @@
   window._authCurrentUser  = () => auth.currentUser;
 
   // ── Auth state listener ──
+  // Store last auth detail so late-attaching listeners can replay it
+  window._lastAuthDetail = null;
+  function dispatchAuth(detail){
+    window._lastAuthDetail = detail;
+    document.dispatchEvent(new CustomEvent('auth-ready', {detail}));
+  }
   onAuthStateChanged(auth, async (firebaseUser) => {
     if(firebaseUser){
       try{
         let profile = await window._fbGet(`players/${firebaseUser.uid}`);
         window._currentFbUser = firebaseUser;
-        // Pass both the profile (may be null = new user) and the google user info
-        document.dispatchEvent(new CustomEvent('auth-ready', {detail:{
+        dispatchAuth({
           user: profile,
           googleUser: {
             uid:         firebaseUser.uid,
@@ -70,13 +75,13 @@
             displayName: firebaseUser.displayName,
             photoURL:    firebaseUser.photoURL
           }
-        }}));
+        });
       }catch(e){
-        document.dispatchEvent(new CustomEvent('auth-ready', {detail:{user:null, googleUser:null}}));
+        dispatchAuth({user:null, googleUser:null});
       }
     } else {
       window._currentFbUser = null;
-      document.dispatchEvent(new CustomEvent('auth-ready', {detail:{user:null, googleUser:null}}));
+      dispatchAuth({user:null, googleUser:null});
     }
   });
 
@@ -442,31 +447,52 @@ let currentUser=null, profileBackTarget='ranking', _pendingGoogleUser=null;
 // ═══════════════════════════════════
 //  AUTH-STATE BOOTSTRAP
 // ═══════════════════════════════════
-let _authResolved = false;
-document.addEventListener('auth-ready', (e) => {
-  const { user: profile, googleUser } = e.detail;
+// Render placeholder immediately — don't wait for auth to show the home screen
+(function earlyRender(){
+  const el = document.getElementById('home-acct-area');
+  if(el) el.innerHTML = `<div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;opacity:0.5;">
+    <div style="font-size:28px;">👤</div>
+    <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Signing in…</div>
+    <div style="font-size:12px;color:var(--muted);">Checking your account</div></div>
+    <div class="sync-dot"></div>
+  </div>`;
+})();
 
+let _authResolved = false;
+
+function handleAuthReady(detail){
+  const { user: profile, googleUser } = detail;
   if(googleUser && !profile){
-    // Authenticated with Google but no DB profile yet → show username setup
     currentUser = null;
     _pendingGoogleUser = googleUser;
-    if(!_authResolved){ _authResolved=true; renderHomeAcct(); }
-    // If account screen is open, show setup there
-    if(document.getElementById('s-account').classList.contains('active')){
-      renderAccountScreen();
-    }
+    renderHomeAcct();
+    if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen();
   } else if(profile){
     currentUser = profile;
     _pendingGoogleUser = null;
-    if(!_authResolved){ _authResolved=true; renderHomeAcct(); }
-    else { renderHomeAcct(); if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen(); }
+    renderHomeAcct();
+    if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen();
   } else {
     currentUser = null;
     _pendingGoogleUser = null;
-    if(!_authResolved){ _authResolved=true; renderHomeAcct(); }
-    else { renderHomeAcct(); if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen(); }
+    renderHomeAcct();
+    if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen();
   }
-}, {once:false});
+  _authResolved = true;
+}
+
+document.addEventListener('auth-ready', (e) => handleAuthReady(e.detail), {once:false});
+
+// If auth-ready already fired before this listener attached (slow script load), replay it
+if(window._lastAuthDetail !== undefined && window._lastAuthDetail !== null){
+  handleAuthReady(window._lastAuthDetail);
+} else if(window._lastAuthDetail === null && window._fbReady){
+  // Firebase ready but auth hasn't fired yet — will come via the listener above
+  // Set a fallback in case it never fires (e.g. offline)
+  setTimeout(()=>{
+    if(!_authResolved) handleAuthReady({user:null, googleUser:null});
+  }, 4000);
+}
 
 // ═══════════════════════════════════
 //  FIREBASE HELPERS
