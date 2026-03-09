@@ -57,7 +57,7 @@
 
   // ── Auth state listener ──
   // Store last auth detail so late-attaching listeners can replay it
-  window._lastAuthDetail = null;
+  window._lastAuthDetail = undefined; // undefined = not yet fired; null/object = fired
   function dispatchAuth(detail){
     window._lastAuthDetail = detail;
     document.dispatchEvent(new CustomEvent('auth-ready', {detail}));
@@ -465,11 +465,8 @@ function handleAuthReady(detail){
 
 document.addEventListener('auth-ready', (e) => handleAuthReady(e.detail));
 
-// Replay if auth fired before this script ran (can happen on fast connections)
-if(window._lastAuthDetail !== null && window._lastAuthDetail !== undefined){
-  handleAuthReady(window._lastAuthDetail);
-} else {
-  // Show a placeholder immediately; real state arrives via auth-ready
+// Show placeholder immediately while auth resolves
+(function(){
   const el = document.getElementById('home-acct-area');
   if(el) el.innerHTML = `<div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;opacity:0.5;cursor:default;">
     <div style="font-size:28px;">👤</div>
@@ -477,9 +474,15 @@ if(window._lastAuthDetail !== null && window._lastAuthDetail !== undefined){
     <div style="font-size:12px;color:var(--muted);">Checking account</div></div>
     <div class="sync-dot"></div>
   </div>`;
-  // Fallback: if auth never fires (offline), show sign-in after 5s
-  setTimeout(()=>{ if(!_authResolved) handleAuthReady({user:null,googleUser:null}); }, 5000);
+})();
+
+// If auth already fired before this listener attached, replay it now
+if(window._lastAuthDetail !== undefined){
+  handleAuthReady(window._lastAuthDetail);
 }
+
+// Fallback: if auth never fires within 6s (e.g. offline), show sign-in card
+setTimeout(()=>{ if(!_authResolved) handleAuthReady({user:null,googleUser:null}); }, 6000);
 
 // ═══════════════════════════════════
 //  FIREBASE HELPERS
@@ -900,7 +903,7 @@ function renderAcctMe(){
     <div style="padding:0 16px;">
       <button class="btn btn-primary" style="margin-bottom:10px;" onclick="viewMyProfile()">📊 View Full Profile & History</button>
       <button class="btn btn-danger" onclick="doGoogleSignOut()">Sign Out</button>
-    </div>\`;
+    </div>`;
 }
 
 
