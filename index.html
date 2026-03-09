@@ -438,60 +438,47 @@ function showConfirm(title, body, okLabel='Confirm', variant='default'){
 // ═══════════════════════════════════
 //  STATE
 // ═══════════════════════════════════
-const ADMIN_EMAIL = 'valegheorghiu@gmail.com';
-function isAdmin(){ return !!(currentUser && currentUser.email === ADMIN_EMAIL); }
-
 let T=null, byeChoice='half', fbUnsub=null, activeTab='rounds', lbTab='points';
 let currentUser=null, profileBackTarget='ranking', _pendingGoogleUser=null;
+let _authResolved=false;
+
 
 // ═══════════════════════════════════
 //  AUTH-STATE BOOTSTRAP
 // ═══════════════════════════════════
-// Render placeholder immediately — don't wait for auth to show the home screen
-(function earlyRender(){
-  const el = document.getElementById('home-acct-area');
-  if(el) el.innerHTML = `<div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;opacity:0.5;">
-    <div style="font-size:28px;">👤</div>
-    <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Signing in…</div>
-    <div style="font-size:12px;color:var(--muted);">Checking your account</div></div>
-    <div class="sync-dot"></div>
-  </div>`;
-})();
-
-let _authResolved = false;
-
 function handleAuthReady(detail){
   const { user: profile, googleUser } = detail;
   if(googleUser && !profile){
     currentUser = null;
     _pendingGoogleUser = googleUser;
-    renderHomeAcct();
-    if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen();
   } else if(profile){
     currentUser = profile;
     _pendingGoogleUser = null;
-    renderHomeAcct();
-    if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen();
   } else {
     currentUser = null;
     _pendingGoogleUser = null;
-    renderHomeAcct();
-    if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen();
   }
   _authResolved = true;
+  renderHomeAcct();
+  if(document.getElementById('s-account').classList.contains('active')) renderAccountScreen();
 }
 
-document.addEventListener('auth-ready', (e) => handleAuthReady(e.detail), {once:false});
+document.addEventListener('auth-ready', (e) => handleAuthReady(e.detail));
 
-// If auth-ready already fired before this listener attached (slow script load), replay it
-if(window._lastAuthDetail !== undefined && window._lastAuthDetail !== null){
+// Replay if auth fired before this script ran (can happen on fast connections)
+if(window._lastAuthDetail !== null && window._lastAuthDetail !== undefined){
   handleAuthReady(window._lastAuthDetail);
-} else if(window._lastAuthDetail === null && window._fbReady){
-  // Firebase ready but auth hasn't fired yet — will come via the listener above
-  // Set a fallback in case it never fires (e.g. offline)
-  setTimeout(()=>{
-    if(!_authResolved) handleAuthReady({user:null, googleUser:null});
-  }, 4000);
+} else {
+  // Show a placeholder immediately; real state arrives via auth-ready
+  const el = document.getElementById('home-acct-area');
+  if(el) el.innerHTML = `<div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 14px;opacity:0.5;cursor:default;">
+    <div style="font-size:28px;">👤</div>
+    <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Loading…</div>
+    <div style="font-size:12px;color:var(--muted);">Checking account</div></div>
+    <div class="sync-dot"></div>
+  </div>`;
+  // Fallback: if auth never fires (offline), show sign-in after 5s
+  setTimeout(()=>{ if(!_authResolved) handleAuthReady({user:null,googleUser:null}); }, 5000);
 }
 
 // ═══════════════════════════════════
@@ -620,7 +607,7 @@ function renderHomeTournList(){
   }
   const active=myTournaments.filter(t=>t.status!=='completed');
   const done=myTournaments.filter(t=>t.status==='completed');
-  let html=``;  // sync button removed — admin-only, shown in profile
+  let html='';
   if(active.length){html+=`<div class="sec" style="margin-top:4px;">Active Tournaments</div>`;active.forEach(t=>{html+=tournCard(t);});}
   if(done.length){html+=`<div class="sec">Completed</div>`;done.forEach(t=>{html+=tournCard(t);});}
   el.innerHTML=html;
@@ -912,219 +899,10 @@ function renderAcctMe(){
     </div>
     <div style="padding:0 16px;">
       <button class="btn btn-primary" style="margin-bottom:10px;" onclick="viewMyProfile()">📊 View Full Profile & History</button>
-      ${isAdmin()?`
-      <!-- ── ADMIN PANEL ── -->
-      <div style="margin-bottom:10px;border:1px solid rgba(255,209,102,0.3);border-radius:var(--r);overflow:hidden;">
-        <div style="background:rgba(255,209,102,0.08);padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,209,102,0.2);">
-          <span style="font-size:16px;">🛡</span>
-          <div>
-            <div style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent3);">Admin</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:1px;">Only visible to you</div>
-          </div>
-        </div>
-        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">Tournament List</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Re-check all saved tournaments against Firebase and remove any that no longer exist.</div>
-            <button onclick="adminSyncTournamentList()" id="admin-sync-btn"
-              style="width:100%;padding:10px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:10px;color:var(--accent3);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
-              <span>🔄</span> Sync Tournament List
-            </button>
-          </div>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">Player Database</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">View total registered accounts in Firebase.</div>
-            <button onclick="adminShowStats()" id="admin-stats-btn"
-              style="width:100%;padding:10px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);border-radius:10px;color:var(--accent3);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
-              <span>📊</span> View DB Stats
-            </button>
-          </div>
-          <div id="admin-output" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text);line-height:1.8;"></div>
-          <!-- Legacy Points Editor -->
-          <div style="border-top:1px solid rgba(255,209,102,0.15);padding-top:12px;margin-top:4px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">Legacy Points Editor</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Set legacy points for any registered player.</div>
-            <input id="admin-lp-search" type="text" placeholder="Search username or display name…" autocapitalize="none"
-              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;outline:none;margin-bottom:8px;"
-              oninput="adminLpSearch(this.value)"/>
-            <div id="admin-lp-results" style="display:none;margin-bottom:8px;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:var(--bg);"></div>
-            <div id="admin-lp-editor" style="display:none;background:var(--surface);border:1px solid rgba(255,209,102,0.2);border-radius:10px;padding:12px;">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                <div id="admin-lp-avatar" style="width:36px;height:36px;border-radius:50%;background:rgba(0,229,160,0.1);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:18px;color:var(--accent);overflow:hidden;flex-shrink:0;"></div>
-                <div><div id="admin-lp-name" style="font-weight:700;font-size:14px;"></div><div id="admin-lp-current" style="font-size:11px;color:var(--muted);margin-top:1px;"></div></div>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <input id="admin-lp-value" type="number" min="0" placeholder="0"
-                  style="flex:1;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;color:var(--text);font-size:20px;font-family:'Bebas Neue',cursive;outline:none;text-align:center;"/>
-                <button onclick="adminSaveLegacyPoints()"
-                  style="padding:10px 18px;background:rgba(255,209,102,0.12);border:1px solid rgba(255,209,102,0.3);border-radius:10px;color:var(--accent3);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">Save ✓</button>
-              </div>
-              <button onclick="adminClearLpEditor()" style="margin-top:8px;background:transparent;border:none;color:var(--muted);font-size:11px;cursor:pointer;">✕ Clear selection</button>
-            </div>
-            <div id="admin-lp-feedback" style="display:none;margin-top:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:12px;"></div>
-          </div>
-        </div>
-      </div>\`:''}
       <button class="btn btn-danger" onclick="doGoogleSignOut()">Sign Out</button>
     </div>\`;
 }
 
-// ═══════════════════════════════════
-//  ADMIN FUNCTIONS
-// ═══════════════════════════════════
-let _adminAllPlayers = null; // cached for LP search
-let _adminLpSelectedUid = null;
-
-async function adminLoadPlayers(){
-  if(_adminAllPlayers) return _adminAllPlayers;
-  const data = await window._fbGet('players');
-  _adminAllPlayers = data ? Object.values(data).filter(p=>p.uid&&p.username&&!p.redirectTo) : [];
-  return _adminAllPlayers;
-}
-
-async function adminLpSearch(query){
-  const res = document.getElementById('admin-lp-results');
-  const editor = document.getElementById('admin-lp-editor');
-  if(!query.trim()){ res.style.display='none'; return; }
-  const players = await adminLoadPlayers();
-  const q = query.toLowerCase();
-  const matches = players.filter(p=>
-    (p.username||'').toLowerCase().includes(q) ||
-    (p.displayName||'').toLowerCase().includes(q) ||
-    (p.googleDisplayName||'').toLowerCase().includes(q)
-  ).slice(0,8);
-  if(!matches.length){
-    res.style.display='block';
-    res.innerHTML=`<div style="padding:12px 14px;font-size:13px;color:var(--muted);">No players found</div>`;
-    return;
-  }
-  res.style.display='block';
-  res.innerHTML = matches.map(p=>{
-    const av = p.avatar
-      ? `<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`
-      : (p.photoURL ? `<img src="${p.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>` : p.username[0].toUpperCase());
-    return `<div onclick="adminSelectLpPlayer('${p.uid}')"
-      style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);">
-      <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,229,160,0.1);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:14px;color:var(--accent);overflow:hidden;flex-shrink:0;">${av}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;">${p.username}</div>
-        ${p.displayName&&p.displayName!==p.username?`<div style="font-size:11px;color:var(--muted);">${p.displayName}</div>`:''}
-      </div>
-      <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:var(--accent3);">${p.legacy_points||0}<span style="font-size:10px;font-family:'DM Sans',sans-serif;color:var(--muted);margin-left:2px;">pts</span></div>
-    </div>`;
-  }).join('');
-}
-
-async function adminSelectLpPlayer(uid){
-  const players = await adminLoadPlayers();
-  const p = players.find(x=>x.uid===uid);
-  if(!p) return;
-  _adminLpSelectedUid = uid;
-  document.getElementById('admin-lp-results').style.display='none';
-  document.getElementById('admin-lp-search').value = p.username;
-  // populate editor
-  const av = p.avatar
-    ? `<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`
-    : (p.photoURL ? `<img src="${p.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>` : p.username[0].toUpperCase());
-  document.getElementById('admin-lp-avatar').innerHTML = av;
-  document.getElementById('admin-lp-name').textContent = p.username + (p.displayName&&p.displayName!==p.username ? ` (${p.displayName})` : '');
-  document.getElementById('admin-lp-current').textContent = `Current legacy points: ${p.legacy_points||0}`;
-  document.getElementById('admin-lp-value').value = p.legacy_points||0;
-  document.getElementById('admin-lp-editor').style.display='block';
-  document.getElementById('admin-lp-feedback').style.display='none';
-  document.getElementById('admin-lp-value').focus();
-  document.getElementById('admin-lp-value').select();
-}
-
-async function adminSaveLegacyPoints(){
-  if(!isAdmin()){toast('Not authorised',true);return;}
-  if(!_adminLpSelectedUid){toast('No player selected',true);return;}
-  const val = parseInt(document.getElementById('admin-lp-value').value)||0;
-  if(val<0){toast('Points cannot be negative',true);return;}
-  const players = await adminLoadPlayers();
-  const p = players.find(x=>x.uid===_adminLpSelectedUid);
-  if(!p){toast('Player not found',true);return;}
-  const btn = document.querySelector('[onclick="adminSaveLegacyPoints()"]');
-  if(btn){btn.textContent='Saving…';btn.disabled=true;}
-  const updated = {...p, legacy_points: val};
-  await fbSaveP(updated);
-  // update cache
-  const idx = _adminAllPlayers.findIndex(x=>x.uid===_adminLpSelectedUid);
-  if(idx>=0) _adminAllPlayers[idx] = updated;
-  // update editor display
-  document.getElementById('admin-lp-current').textContent = `Current legacy points: ${val}`;
-  const fb = document.getElementById('admin-lp-feedback');
-  fb.style.display='block';
-  fb.style.color='var(--accent)';
-  fb.textContent = `✓ Saved ${val} legacy points for ${p.username}`;
-  if(btn){btn.textContent='Save ✓';btn.disabled=false;}
-  toast(`${p.username} → ${val} legacy pts ✓`);
-}
-
-function adminClearLpEditor(){
-  _adminLpSelectedUid = null;
-  document.getElementById('admin-lp-search').value='';
-  document.getElementById('admin-lp-results').style.display='none';
-  document.getElementById('admin-lp-editor').style.display='none';
-  document.getElementById('admin-lp-feedback').style.display='none';
-}
-async function adminSyncTournamentList(){
-  if(!isAdmin()){toast('Not authorised',true);return;}
-  const btn=document.getElementById('admin-sync-btn');
-  const out=document.getElementById('admin-output');
-  if(btn){btn.textContent='⏳ Syncing…';btn.disabled=true;}
-  if(out){out.style.display='none';}
-  let removed=0, kept=0;
-  const checked=await Promise.all(
-    myTournaments.map(async t=>{
-      try{ const data=await fbLoadT(t.code); if(data){kept++;return t;}else{removed++;return null;} }
-      catch(e){ kept++;return t; }
-    })
-  );
-  myTournaments=checked.filter(Boolean);
-  saveMyTournaments();
-  renderHomeTournList();
-  if(btn){btn.innerHTML='<span>🔄</span> Sync Tournament List';btn.disabled=false;}
-  if(out){
-    out.style.display='block';
-    out.innerHTML=`✅ Sync complete<br>
-      <span style="color:var(--accent);">Kept: ${kept}</span> &nbsp;·&nbsp;
-      <span style="color:var(--accent2);">Removed: ${removed}</span>`;
-  }
-  toast(removed>0?`Removed ${removed} deleted tournament${removed>1?'s':''}`:'All tournaments up to date ✓');
-}
-
-async function adminShowStats(){
-  if(!isAdmin()){toast('Not authorised',true);return;}
-  const btn=document.getElementById('admin-stats-btn');
-  const out=document.getElementById('admin-output');
-  if(btn){btn.textContent='⏳ Loading…';btn.disabled=true;}
-  if(out){out.style.display='none';}
-  try{
-    const [players, tournaments]=await Promise.all([
-      window._fbGet('players'),
-      window._fbGet('tournaments')
-    ]);
-    const playerList=players?Object.values(players).filter(p=>p.username&&!p.redirectTo):[];
-    const tournList=tournaments?Object.keys(tournaments):[];
-    const totalPts=playerList.reduce((a,p)=>{
-      let pts=p.legacy_points||0;
-      (p.tournaments||[]).forEach(t=>pts+=t.points||0);
-      return a+pts;
-    },0);
-    if(out){
-      out.style.display='block';
-      out.innerHTML=`<strong style="color:var(--accent3);">Firebase DB Stats</strong><br>
-        👤 Registered players: <strong>${playerList.length}</strong><br>
-        🎾 Tournaments in DB: <strong>${tournList.length}</strong><br>
-        🏆 Total points logged: <strong>${totalPts}</strong><br>
-        📅 Checked: <strong>${new Date().toLocaleTimeString()}</strong>`;
-    }
-  }catch(e){
-    if(out){out.style.display='block';out.textContent='Error loading stats: '+e.message;}
-  }
-  if(btn){btn.innerHTML='<span>📊</span> View DB Stats';btn.disabled=false;}
-}
 
 function showDisplayNameEdit(){
   document.getElementById('display-name-edit').style.display='block';
