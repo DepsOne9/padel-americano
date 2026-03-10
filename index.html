@@ -332,7 +332,7 @@ input[type=number]{-moz-appearance:textfield;}
     <div class="fg"><label>Tournament Name</label><input id="s-name" type="text" placeholder="e.g. Saturday Americano"/></div>
     <div class="row">
       <div class="fg" style="flex:1;"><label>Points / Game</label>
-        <select id="s-ppg"><option value="16">16 pts</option><option value="24" selected>24 pts</option><option value="32">32 pts</option></select>
+        <select id="s-ppg"><option value="16">16 pts</option><option value="24" selected>24 pts</option><option value="32">32 pts</option><option value="48">48 pts</option></select>
       </div>
       <div class="fg" style="flex:1;"><label>Rounds</label>
         <select id="s-rounds"><option>3</option><option>4</option><option value="5" selected>5</option><option>6</option><option>7</option><option>8</option></select>
@@ -578,6 +578,28 @@ function upsertMyTournament(t,isCreator){
   saveMyTournaments();
 }
 loadMyTournaments();
+
+// ── Deep link handler: ?join=CODE ──
+// Triggered when user taps a WhatsApp/Messenger share link
+(function handleDeepLink(){
+  const params = new URLSearchParams(window.location.search);
+  const joinCode = params.get('join');
+  if(!joinCode) return;
+  // Clean the URL without reloading
+  window.history.replaceState({}, '', window.location.pathname);
+  // Wait for Firebase to be ready, then auto-join
+  function tryJoin(){
+    if(!window._fbGet){ setTimeout(tryJoin, 200); return; }
+    fbLoadT(joinCode).then(data => {
+      if(!data){ toast('Tournament not found', true); return; }
+      T = data;
+      upsertMyTournament(T, false);
+      openTournament();
+      toast(`Joined ${T.name}! 🎾`);
+    }).catch(() => toast('Could not load tournament', true));
+  }
+  tryJoin();
+})();
 
 function renderHomeAcct(){
   const el=document.getElementById('home-acct-area');
@@ -1265,7 +1287,10 @@ function renderTopBar(){
     <div class="prog-wrap"><div class="prog-fill" style="width:${pct}%"></div></div>
     <div class="share-bar">
       <div><div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:2px;">Share Code</div><div class="share-code">${T.code}</div></div>
-      <button class="copy-btn" id="copy-btn" onclick="copyCode()">📋 Copy</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="copy-btn" id="copy-btn" onclick="copyCode()">📋 Copy</button>
+        <button class="copy-btn" id="share-btn" onclick="shareLink()">🔗 Share</button>
+      </div>
     </div>
     ${isCreator?`
       <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -1286,6 +1311,27 @@ function copyCode(){
   const btn=document.getElementById('copy-btn');if(!btn)return;
   btn.textContent='✓ Copied!';btn.classList.add('done');
   setTimeout(()=>{btn.textContent='📋 Copy';btn.classList.remove('done');},2000);
+}
+
+function getTournamentShareUrl(){
+  const base = window.location.href.split('?')[0].replace(/#.*$/,'');
+  return `${base}?join=${T.code}`;
+}
+
+function shareLink(){
+  const url = getTournamentShareUrl();
+  const btn = document.getElementById('share-btn');
+  // Use native share sheet if available (mobile), otherwise copy to clipboard
+  if(navigator.share){
+    navigator.share({
+      title: T.name,
+      text: `Join my Padel Americano tournament "${T.name}"! 🎾 Code: ${T.code}`,
+      url
+    }).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(url).catch(()=>{});
+    if(btn){ btn.textContent='✓ Copied!'; btn.classList.add('done'); setTimeout(()=>{ btn.textContent='🔗 Share'; btn.classList.remove('done'); }, 2000); }
+  }
 }
 
 // ═══════════════════════════════════
