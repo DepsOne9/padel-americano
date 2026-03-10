@@ -2043,21 +2043,25 @@ function toggleHistEntry(idx){
 }
 
 async function removeHistoryEntry(uidOrUsername, code){
-  showConfirm('Remove Tournament','Remove this tournament from your profile? Points will be deducted from your total.',async()=>{
-    // Look up by uid first (direct Firebase key), fall back to username scan
-    let player=null;
-    try{ player=await window._fbGet(`players/${uidOrUsername}`); }catch(e){}
-    if(!player||player.redirectTo){ try{ player=await fbLoadP(uidOrUsername); }catch(e){} }
-    if(!player){toast('Profile not found',true);return;}
-    const updated=(player.tournaments||[]).filter(t=>(t.code||'')!==String(code));
-    const fbKey=player.uid||player.username;
-    await window._fbSet(`players/${fbKey}`,{...player,tournaments:updated});
-    if(currentUser&&(currentUser.uid===player.uid||currentUser.username===player.username)){
-      currentUser={...currentUser,tournaments:updated};
-    }
-    toast('Tournament removed ✓');
-    await openProfileScreen(uidOrUsername);
-  },'danger');
+  const confirmed = await showConfirm(
+    'Remove Tournament',
+    'Remove this tournament from your profile? Points will be deducted from your total.',
+    'Remove 🗑',
+    'danger'
+  );
+  if(!confirmed) return;
+  let player=null;
+  try{ player=await window._fbGet(`players/${uidOrUsername}`); }catch(e){}
+  if(!player||player.redirectTo){ try{ player=await fbLoadP(uidOrUsername); }catch(e){} }
+  if(!player){toast('Profile not found',true);return;}
+  const updated=(player.tournaments||[]).filter(t=>(t.code||'')!==String(code));
+  const fbKey=player.uid||player.username;
+  await window._fbSet(`players/${fbKey}`,{...player,tournaments:updated});
+  if(currentUser&&(currentUser.uid===player.uid||currentUser.username===player.username)){
+    currentUser={...currentUser,tournaments:updated};
+  }
+  toast('Tournament removed ✓');
+  await openProfileScreen(uidOrUsername);
 }
 
 // ═══════════════════════════════════
