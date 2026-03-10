@@ -1092,8 +1092,8 @@ async function openProfileScreen(uidOrUsername){
       const rankColor=th.rank===1?'var(--accent3)':th.rank===2?'#aaa':th.rank===3?'#cd7f32':'var(--muted)';
       const rankMedal=th.rank===1?'🥇':th.rank===2?'🥈':th.rank===3?'🥉':'';
       histHTML+=`
-        <div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="toggleHistEntry(${idx})">
-          <div style="display:flex;align-items:center;gap:10px;">
+        <div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="toggleHistEntry(${idx})">
             <div style="flex:1;min-width:0;">
               <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${th.name||'Tournament'}</div>
               <div style="font-size:11px;color:var(--muted);margin-top:2px;">${fmtDate(th.date)} · ${th.ppg||24}pts/game</div>
@@ -1103,6 +1103,9 @@ async function openProfileScreen(uidOrUsername){
               <div style="font-size:10px;color:var(--muted);">pts</div>
             </div>
             <div style="font-size:18px;flex-shrink:0;color:var(--muted);transition:transform 0.2s;" id="hist-chevron-${idx}">›</div>
+          </div>
+          <div id="hist-detail-delete-${idx}" style="display:none;margin-top:8px;">
+            <button onclick="removeHistoryEntry('${username}','${th.code||idx}')" style="width:100%;padding:9px;background:rgba(255,92,92,0.08);border:1px solid rgba(255,92,92,0.25);border-radius:10px;color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🗑 Remove from my profile</button>
           </div>
           <div style="display:flex;gap:10px;margin-top:10px;">
             <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
@@ -1836,11 +1839,26 @@ async function openLbProfile(uid){profileBackTarget='leaderboard';await openProf
 // ═══════════════════════════════════
 function toggleHistEntry(idx){
   const detail=document.getElementById(`hist-detail-${idx}`);
+  const delBtn=document.getElementById(`hist-detail-delete-${idx}`);
   const chevron=document.getElementById(`hist-chevron-${idx}`);
   if(!detail)return;
   const open=detail.style.display==='block';
   detail.style.display=open?'none':'block';
+  if(delBtn)delBtn.style.display=open?'none':'block';
   if(chevron)chevron.style.transform=open?'':'rotate(90deg)';
+}
+
+async function removeHistoryEntry(username, code){
+  if(!confirm('Remove this tournament from your profile? This will also remove those points from your total.')) return;
+  const player = await fbLoadP(username);
+  if(!player) return;
+  const updated = (player.tournaments||[]).filter(t=> (t.code||'') !== String(code));
+  await fbSaveP({...player, tournaments: updated});
+  if(currentUser && currentUser.username === username){
+    saveSess({...currentUser, tournaments: updated});
+  }
+  toast('Tournament removed from profile ✓');
+  await openProfileScreen(username);
 }
 
 // ═══════════════════════════════════
