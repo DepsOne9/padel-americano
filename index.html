@@ -97,7 +97,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 input,select,button{font-family:'DM Sans',sans-serif;}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
 input[type=number]{-moz-appearance:textfield;}
-.screen{display:none;min-height:100vh;}.screen.active{display:block;}
+.screen{display:none;min-height:100vh;}.screen.active{display:block;}.screen#s-profile{overflow-y:auto;height:100vh;}
 .hdr{background:linear-gradient(180deg,var(--surface) 0%,transparent 100%);padding:52px 20px 22px;text-align:center;position:relative;}
 .logo{font-family:'Bebas Neue',cursive;font-size:52px;letter-spacing:5px;background:linear-gradient(135deg,var(--accent),#00b4d8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;}
 .logo-sub{font-size:11px;letter-spacing:5px;text-transform:uppercase;color:var(--muted);margin-top:3px;}
@@ -135,7 +135,7 @@ input[type=number]{-moz-appearance:textfield;}
 .gnav-icon{font-size:22px;line-height:1;}
 /* ── TOP BAR ── */
 .top-bar{display:flex;align-items:center;justify-content:space-between;padding:52px 16px 14px;background:linear-gradient(180deg,var(--surface) 0%,transparent 100%);position:relative;}
-.top-bar-logo{font-family:'Bebas Neue',cursive;font-size:28px;letter-spacing:4px;background:linear-gradient(135deg,var(--accent),#00b4d8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.top-bar-logo{font-family:'Bebas Neue',cursive;font-size:24px;letter-spacing:4px;background:linear-gradient(135deg,var(--accent),#00b4d8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .avatar-btn{width:38px;height:38px;border-radius:50%;background:rgba(0,229,160,0.12);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',cursive;font-size:17px;color:var(--accent);cursor:pointer;overflow:hidden;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .avatar-btn:active{opacity:0.8;}
 /* ── DROPDOWN MENU ── */
@@ -307,6 +307,7 @@ input[type=number]{-moz-appearance:textfield;}
     <div id="top-avatar-btn" onclick="toggleDropdown()"></div>
   </div>
   <div class="wrap" style="padding-top:4px;">
+    <div id="home-stats-bar"></div>
     <div class="row" style="margin-bottom:12px;">
       <button class="btn btn-primary" style="flex:1;" onclick="goSetup()">+ New</button>
       <button class="btn btn-secondary" style="flex:1;" onclick="goJoin()">Join</button>
@@ -318,7 +319,7 @@ input[type=number]{-moz-appearance:textfield;}
 <!-- ══ ACCOUNT ════════════════════════════════════════════ -->
 <div class="screen" id="s-account">
   <div class="top-bar" style="padding-bottom:10px;">
-    <div class="top-bar-logo" style="font-size:22px;">PROFILE</div>
+    <div class="top-bar-logo">PROFILE</div>
     <div id="top-avatar-btn-acct" onclick="toggleDropdown()"></div>
   </div>
   <div style="padding:0 16px 90px;" id="acct-body"></div>
@@ -326,10 +327,12 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ JOIN ══════════════════════════════════════════════ -->
 <div class="screen" id="s-join">
-  <div class="hdr">
-    <button class="back-btn" onclick="goHome()">← Back</button>
-    <div class="logo" style="font-size:34px;">JOIN</div>
-    <div class="logo-sub">Enter tournament code</div>
+  <div class="top-bar" style="padding-bottom:10px;">
+    <div>
+      <div class="top-bar-logo">JOIN</div>
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Enter tournament code</div>
+    </div>
+    <button onclick="goHome()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:50px;font-size:13px;cursor:pointer;">← Back</button>
   </div>
   <div class="wrap" style="padding-top:8px;">
     <div class="card">
@@ -346,9 +349,12 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ SETUP ═════════════════════════════════════════════ -->
 <div class="screen" id="s-setup">
-  <div class="hdr">
-    <button class="back-btn" onclick="goHome()">← Back</button>
-    <div class="logo" style="font-size:30px;letter-spacing:2px;">NEW TOURNAMENT</div>
+  <div class="top-bar" style="padding-bottom:10px;">
+    <div>
+      <div class="top-bar-logo">NEW TOURNAMENT</div>
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Configure your session</div>
+    </div>
+    <button onclick="goHome()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:50px;font-size:13px;cursor:pointer;">← Back</button>
   </div>
   <div class="wrap" style="padding-top:4px;">
     <div class="fg"><label>Tournament Name</label><input id="s-name" type="text" placeholder="e.g. Saturday Americano"/></div>
@@ -395,18 +401,30 @@ input[type=number]{-moz-appearance:textfield;}
 </div>
 
 <!-- ══ PLAYER PROFILE ════════════════════════════════════ -->
-<div class="screen" id="s-profile">
-  <div style="padding:52px 16px 10px;background:linear-gradient(180deg,var(--surface),transparent);">
+<div class="screen" id="s-profile" style="overflow-y:auto;">
+  <div style="padding:52px 16px 10px;background:linear-gradient(180deg,var(--surface),transparent);position:sticky;top:0;z-index:10;">
     <button onclick="closeProfile()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:50px;font-size:13px;cursor:pointer;">← Back</button>
   </div>
-  <div id="profile-body" style="padding-bottom:90px;overflow-y:auto;"></div>
+  <div id="profile-body" style="padding-bottom:90px;"></div>
+</div>
+
+<!-- ══ MY GAMES ══════════════════════════════════════════ -->
+<div class="screen" id="s-mygames">
+  <div class="top-bar" style="padding-bottom:10px;">
+    <div>
+      <div class="top-bar-logo">MY GAMES</div>
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Completed tournaments</div>
+    </div>
+    <div id="top-avatar-btn-games" onclick="toggleDropdown()"></div>
+  </div>
+  <div id="mygames-body" style="padding:0 16px 90px;"></div>
 </div>
 
 <!-- ══ LEADERBOARD ══════════════════════════════════════ -->
 <div class="screen" id="s-leaderboard">
   <div class="top-bar" style="padding-bottom:10px;">
     <div>
-      <div class="top-bar-logo" style="font-size:22px;">RANKING</div>
+      <div class="top-bar-logo">RANKING</div>
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Global Leaderboard</div>
     </div>
     <div id="top-avatar-btn-lb" onclick="toggleDropdown()"></div>
@@ -632,15 +650,23 @@ function gnavGo(tab){
   else if(tab==='profile'){renderAccountScreen();show('s-account');}
 }
 function showMyGames(){
-  // Show home screen filtered to My Games section
   gnavSetActive('games');
-  renderHomeAcct();
-  show('s-home');
-  // Scroll to tournament list
-  setTimeout(()=>{
-    const el=document.getElementById('home-tourn-list');
-    if(el)el.scrollIntoView({behavior:'smooth'});
-  },100);
+  renderMyGames();
+  show('s-mygames');
+}
+
+function renderMyGames(){
+  const el=document.getElementById('mygames-body');if(!el)return;
+  const done=myTournaments.filter(t=>t.status==='completed');
+  if(!done.length){
+    el.innerHTML=`<div style="text-align:center;padding:50px 20px;color:var(--muted);">
+      ${padelIcon(52,0.4)}<div style="font-size:14px;font-weight:600;margin-top:4px;">No completed games yet</div>
+      <div style="font-size:12px;margin-top:6px;">Finish a tournament to see it here</div></div>`;
+    return;
+  }
+  let html=`<div class="sec" style="margin-top:4px;">Completed (${done.length})</div>`;
+  done.forEach(t=>{html+=tournCard(t);});
+  el.innerHTML=html;
 }
 
 // ═══════════════════════════════════
@@ -685,11 +711,12 @@ function renderHomeAcct(){
   renderTopAvatar();
   renderDropdown();
   renderHomeTournList();
+  renderMyGames();
 }
 
 function renderTopAvatar(){
   // Render avatar button in all top bars
-  ['top-avatar-btn','top-avatar-btn-acct','top-avatar-btn-lb'].forEach(id=>{
+  ['top-avatar-btn','top-avatar-btn-acct','top-avatar-btn-lb','top-avatar-btn-games'].forEach(id=>{
     const el=document.getElementById(id); if(!el)return;
     if(currentUser){
       const av=currentUser.avatar
@@ -752,18 +779,49 @@ function dropSignOut(){closeDropdown();doGoogleSignOut();}
 function dropSignIn(){closeDropdown();gnavGo('profile');}
 
 function renderHomeTournList(){
+  renderHomeStats();
   const el=document.getElementById('home-tourn-list');if(!el)return;
-  if(!myTournaments.length){
+  const active=myTournaments.filter(t=>t.status!=='completed');
+  if(!active.length){
     el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--muted);font-size:13px;">
-      ${padelIcon(42)}Create or join a tournament to get started</div>`;
+      ${padelIcon(42,0.4)}<div style="font-size:14px;font-weight:600;margin-top:4px;">No active tournaments</div>
+      <div style="font-size:12px;margin-top:6px;">Start or join one to play</div></div>`;
     return;
   }
-  const active=myTournaments.filter(t=>t.status!=='completed');
-  const done=myTournaments.filter(t=>t.status==='completed');
-  let html='';
-  if(active.length){html+=`<div class="sec" style="margin-top:4px;">Active Tournaments</div>`;active.forEach(t=>{html+=tournCard(t);});}
-  if(done.length){html+=`<div class="sec">Completed</div>`;done.forEach(t=>{html+=tournCard(t);});}
+  let html=`<div class="sec" style="margin-top:4px;">Active (${active.length})</div>`;
+  active.forEach(t=>{html+=tournCard(t);});
   el.innerHTML=html;
+}
+
+function renderHomeStats(){
+  const el=document.getElementById('home-stats-bar');if(!el)return;
+  if(!currentUser){el.innerHTML='';return;}
+  // Pull stats from currentUser session (tournaments array saved on profile)
+  const history=currentUser.tournaments||[];
+  let wins=0,losses=0,played=0,yearPts=0;
+  const thisYear=new Date().getFullYear();
+  history.forEach(th=>{
+    wins+=th.wins||0; losses+=th.losses||0; played+=th.played||0;
+    const y=th.date?new Date(th.date).getFullYear():0;
+    if(y===thisYear) yearPts+=th.points||0;
+  });
+  yearPts+=(currentUser.legacy_points||0);
+  const winRate=played>0?Math.round(wins/(wins+losses||1)*100):0;
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:28px;color:var(--accent);line-height:1;">${winRate}%</div>
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:3px;">Win Rate</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:28px;color:var(--text);line-height:1;">${played}</div>
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:3px;">Matches</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:28px;color:var(--accent3);line-height:1;">${yearPts}</div>
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:3px;">${thisYear} Pts</div>
+      </div>
+    </div>`;
 }
 
 async function syncTournamentList(){
@@ -1195,7 +1253,7 @@ async function viewMyProfile(){
 async function openProfileScreen(uidOrUsername){
   const pb=document.getElementById('profile-body');
   pb.innerHTML=`<div class="spinner"></div>`;
-  pb.style.cssText='padding-bottom:90px;overflow-y:auto;height:calc(100vh - 60px);';
+  pb.style.cssText='padding-bottom:90px;';
   show('s-profile');
   if(!navigator.onLine){
     pb.innerHTML=`<div class="empty"><div class="ei">📡</div>No internet connection</div>`;return;
@@ -1241,7 +1299,7 @@ async function openProfileScreen(uidOrUsername){
             <div style="font-size:18px;flex-shrink:0;color:var(--muted);transition:transform 0.2s;" id="hist-chevron-${idx}">›</div>
           </div>
           <div id="hist-detail-delete-${idx}" style="display:none;margin-top:8px;">
-            <button onclick="removeHistoryEntry('${username}','${th.code||idx}')" style="width:100%;padding:9px;background:rgba(255,92,92,0.08);border:1px solid rgba(255,92,92,0.25);border-radius:10px;color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🗑 Remove from my profile</button>
+            <button onclick="removeHistoryEntry('${player.uid||player.username}','${th.code||idx}')" style="width:100%;padding:9px;background:rgba(255,92,92,0.08);border:1px solid rgba(255,92,92,0.25);border-radius:10px;color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🗑 Remove from my profile</button>
           </div>
           <div style="display:flex;gap:10px;margin-top:10px;">
             <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
@@ -1984,17 +2042,22 @@ function toggleHistEntry(idx){
   if(chevron)chevron.style.transform=open?'':'rotate(90deg)';
 }
 
-async function removeHistoryEntry(username, code){
-  if(!confirm('Remove this tournament from your profile? This will also remove those points from your total.')) return;
-  const player = await fbLoadP(username);
-  if(!player) return;
-  const updated = (player.tournaments||[]).filter(t=> (t.code||'') !== String(code));
-  await fbSaveP({...player, tournaments: updated});
-  if(currentUser && currentUser.username === username){
-    saveSess({...currentUser, tournaments: updated});
-  }
-  toast('Tournament removed from profile ✓');
-  await openProfileScreen(username);
+async function removeHistoryEntry(uidOrUsername, code){
+  showConfirm('Remove Tournament','Remove this tournament from your profile? Points will be deducted from your total.',async()=>{
+    // Look up by uid first (direct Firebase key), fall back to username scan
+    let player=null;
+    try{ player=await window._fbGet(`players/${uidOrUsername}`); }catch(e){}
+    if(!player||player.redirectTo){ try{ player=await fbLoadP(uidOrUsername); }catch(e){} }
+    if(!player){toast('Profile not found',true);return;}
+    const updated=(player.tournaments||[]).filter(t=>(t.code||'')!==String(code));
+    const fbKey=player.uid||player.username;
+    await window._fbSet(`players/${fbKey}`,{...player,tournaments:updated});
+    if(currentUser&&(currentUser.uid===player.uid||currentUser.username===player.username)){
+      currentUser={...currentUser,tournaments:updated};
+    }
+    toast('Tournament removed ✓');
+    await openProfileScreen(uidOrUsername);
+  },'danger');
 }
 
 // ═══════════════════════════════════
