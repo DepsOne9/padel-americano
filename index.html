@@ -304,7 +304,10 @@ input[type=number]{-moz-appearance:textfield;}
       <div class="top-bar-logo">PADEL</div>
       <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);">Americano</div>
     </div>
-    <div id="top-avatar-btn" onclick="toggleDropdown()"></div>
+    <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleDropdown()">
+      <div id="home-signin-label"></div>
+      <div id="top-avatar-btn"></div>
+    </div>
   </div>
   <div class="wrap" style="padding-top:4px;">
     <div id="home-stats-bar"></div>
@@ -715,7 +718,6 @@ function renderHomeAcct(){
 }
 
 function renderTopAvatar(){
-  // Render avatar button in all top bars
   ['top-avatar-btn','top-avatar-btn-acct','top-avatar-btn-lb','top-avatar-btn-games'].forEach(id=>{
     const el=document.getElementById(id); if(!el)return;
     if(currentUser){
@@ -724,14 +726,23 @@ function renderTopAvatar(){
         :currentUser.username[0].toUpperCase();
       el.className='avatar-btn';
       el.innerHTML=av;
-      el.onclick=toggleDropdown;
+      el.onclick=null;
     } else {
       el.className='avatar-btn';
       el.style.cssText='background:var(--surface);border-color:var(--border);color:var(--muted);';
       el.innerHTML='👤';
-      el.onclick=toggleDropdown;
+      el.onclick=null;
     }
   });
+  // Show/hide "Sign In / Register" label on home screen only
+  const label=document.getElementById('home-signin-label');
+  if(label){
+    if(!currentUser){
+      label.innerHTML=`<span style="font-size:12px;font-weight:600;color:var(--muted);">Sign In / Register</span>`;
+    } else {
+      label.innerHTML='';
+    }
+  }
 }
 
 function renderDropdown(){
@@ -819,7 +830,7 @@ function renderHomeStats(){
       </div>
       <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;">
         <div style="font-family:'Bebas Neue',cursive;font-size:28px;color:var(--accent3);line-height:1;">${yearPts}</div>
-        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:3px;">${thisYear} Pts</div>
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:3px;">Total Pts</div>
       </div>
     </div>`;
 }
@@ -1298,9 +1309,9 @@ async function openProfileScreen(uidOrUsername){
             </div>
             <div style="font-size:18px;flex-shrink:0;color:var(--muted);transition:transform 0.2s;" id="hist-chevron-${idx}">›</div>
           </div>
-          <div id="hist-detail-delete-${idx}" style="display:none;margin-top:8px;">
+          ${isMe?`<div id="hist-detail-delete-${idx}" style="display:none;margin-top:8px;">
             <button onclick="removeHistoryEntry('${player.uid||player.username}','${th.code||idx}')" style="width:100%;padding:9px;background:rgba(255,92,92,0.08);border:1px solid rgba(255,92,92,0.25);border-radius:10px;color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🗑 Remove from my profile</button>
-          </div>
+          </div>`:''}
           <div style="display:flex;gap:10px;margin-top:10px;">
             <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
               <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:${rankColor};">${rankMedal||rankStr}</div>
