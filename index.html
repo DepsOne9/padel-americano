@@ -406,10 +406,7 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ PLAYER PROFILE ════════════════════════════════════ -->
 <div class="screen" id="s-profile" style="overflow-y:auto;">
-  <div style="padding:52px 16px 10px;background:linear-gradient(180deg,var(--surface),transparent);position:sticky;top:0;z-index:10;">
-    <button onclick="closeProfile()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:50px;font-size:13px;cursor:pointer;">← Back</button>
-  </div>
-  <div id="profile-body" style="padding-bottom:90px;"></div>
+  <div id="profile-body" style="padding-bottom:90px;padding-top:16px;"></div>
 </div>
 
 <!-- ══ ALL GAMES ══════════════════════════════════════════ -->
@@ -740,12 +737,12 @@ function renderTopAvatar(){
         :currentUser.username[0].toUpperCase();
       el.className='avatar-btn';
       el.innerHTML=av;
-      el.onclick=null;
+      el.onclick=toggleDropdown;
     } else {
       el.className='avatar-btn';
       el.style.cssText='background:var(--surface);border-color:var(--border);color:var(--muted);';
       el.innerHTML='👤';
-      el.onclick=null;
+      el.onclick=toggleDropdown;
     }
   });
   // Show/hide "Sign In / Register" label on home screen only
