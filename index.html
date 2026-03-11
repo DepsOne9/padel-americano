@@ -336,11 +336,12 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ HOME ══════════════════════════════════════════════ -->
 <div class="screen active" id="s-home">
-  <div class="top-bar">
-    <div>
+  <div class="top-bar" style="position:relative;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;">
       <div class="top-bar-logo">PADEL</div>
       <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);">Americano</div>
     </div>
+    <div style="visibility:hidden;"><div class="avatar-btn"></div></div>
     <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleDropdown()">
       <div id="home-signin-label"></div>
       <div id="top-avatar-btn" onclick="toggleDropdown()"></div>
@@ -365,8 +366,11 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ ACCOUNT ════════════════════════════════════════════ -->
 <div class="screen" id="s-account">
-  <div class="top-bar" style="padding-bottom:10px;">
-    <div class="top-bar-logo">PROFILE</div>
+  <div class="top-bar" style="padding-bottom:10px;position:relative;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);pointer-events:none;">
+      <div class="top-bar-logo">PROFILE</div>
+    </div>
+    <div style="visibility:hidden;"><div class="avatar-btn"></div></div>
     <div id="top-avatar-btn-acct" onclick="toggleDropdown()"></div>
   </div>
   <div style="padding:0 16px 90px;" id="acct-body"></div>
@@ -374,11 +378,12 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ JOIN ══════════════════════════════════════════════ -->
 <div class="screen" id="s-join">
-  <div class="top-bar" style="padding-bottom:10px;">
-    <div>
+  <div class="top-bar" style="padding-bottom:10px;position:relative;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;">
       <div class="top-bar-logo">JOIN</div>
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Enter tournament code</div>
     </div>
+    <div style="visibility:hidden;"><div class="avatar-btn"></div></div>
     <button onclick="goMainHome()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:50px;font-size:13px;cursor:pointer;">← Back</button>
   </div>
   <div class="wrap" style="padding-top:8px;">
@@ -396,11 +401,12 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ SETUP ═════════════════════════════════════════════ -->
 <div class="screen" id="s-setup">
-  <div class="top-bar" style="padding-bottom:10px;">
-    <div>
+  <div class="top-bar" style="padding-bottom:10px;position:relative;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;">
       <div class="top-bar-logo">NEW TOURNAMENT</div>
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Configure your session</div>
     </div>
+    <div style="visibility:hidden;"><div class="avatar-btn"></div></div>
     <button onclick="goMainHome()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:50px;font-size:13px;cursor:pointer;">← Back</button>
   </div>
   <div class="wrap" style="padding-top:4px;">
@@ -455,11 +461,12 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ ALL GAMES ══════════════════════════════════════════ -->
 <div class="screen" id="s-mygames">
-  <div class="top-bar" style="padding-bottom:10px;">
-    <div>
+  <div class="top-bar" style="padding-bottom:10px;position:relative;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;">
       <div class="top-bar-logo">ALL GAMES</div>
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Completed tournaments</div>
     </div>
+    <div style="visibility:hidden;"><div class="avatar-btn"></div></div>
     <div id="top-avatar-btn-games" onclick="toggleDropdown()"></div>
   </div>
   <div id="mygames-body" style="padding:0 16px 90px;"></div>
@@ -467,11 +474,12 @@ input[type=number]{-moz-appearance:textfield;}
 
 <!-- ══ LEADERBOARD ══════════════════════════════════════ -->
 <div class="screen" id="s-leaderboard">
-  <div class="top-bar" style="padding-bottom:10px;">
-    <div>
+  <div class="top-bar" style="padding-bottom:10px;position:relative;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;">
       <div class="top-bar-logo">RANKING</div>
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Global Leaderboard</div>
     </div>
+    <div style="visibility:hidden;"><div class="avatar-btn"></div></div>
     <div id="top-avatar-btn-lb" onclick="toggleDropdown()"></div>
   </div>
   <div id="lb-global-tabs" style="display:flex;background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;"></div>
@@ -2130,7 +2138,7 @@ function renderLbBody(allPlayers){
       pts+=th.points||0;wins+=th.wins||0;losses+=th.losses||0;played+=th.played||0;count++;
     });
     if(globalLbTab==='yearly') pts+=(p.legacy_points||0);
-    return{uid:p.uid,username:p.username,avatar:p.avatar||null,pts,wins,losses,played,count};
+    return{uid:p.uid,username:p.username,displayName:p.displayName||p.username,avatar:p.avatar||null,pts,wins,losses,played,count};
   }).filter(r=>r.count>0||(globalLbTab==='yearly'&&r.pts>0)).sort((a,b)=>b.pts-a.pts||b.wins-a.wins);
 
   if(!rows.length){
@@ -2147,11 +2155,12 @@ function renderLbBody(allPlayers){
   podOrder.forEach((p,i)=>{
     if(!p)return;
     const pc=podCls[i];
-    const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`${p.username[0].toUpperCase()}`;
+    const medalEmoji=pc==='p1'?'🥇':pc==='p2'?'🥈':'🥉';
+    const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`${p.displayName[0].toUpperCase()}`;
     html+=`<div class="pod ${pc}" onclick="openLbProfile('${p.uid}')">
-      ${pc==='p1'?`<div style="font-size:20px;margin-bottom:4px;">${medals[0]}</div>`:''}
+      <div style="font-size:${pc==='p1'?'24':'20'}px;margin-bottom:4px;">${medalEmoji}</div>
       <div class="pod-avatar" style="overflow:hidden;">${av}</div>
-      <div class="pod-name">${p.username}</div>
+      <div class="pod-name">${p.displayName}</div>
       <div class="pod-pts">${p.pts}</div>
       <div class="pod-lbl">pts</div>
       <div class="pod-block"></div>
@@ -2162,12 +2171,12 @@ function renderLbBody(allPlayers){
     const pct=Math.round(p.pts/maxPts*100);
     const isMe=currentUser&&currentUser.uid===p.uid;
     const medal=medals[i]||null;
-    const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`<span style="font-family:'Bebas Neue',cursive;font-size:13px;color:var(--accent);">${p.username[0].toUpperCase()}</span>`;
+    const av=p.avatar?`<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>`:`<span style="font-family:'Bebas Neue',cursive;font-size:13px;color:var(--accent);">${p.displayName[0].toUpperCase()}</span>`;
     html+=`<div onclick="openLbProfile('${p.uid}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isMe?'rgba(0,229,160,0.07)':i<3?'var(--card)':'var(--surface)'};border:1px solid ${isMe?'rgba(0,229,160,0.3)':i<3?'var(--border)':'transparent'};border-radius:12px;margin-bottom:7px;cursor:pointer;">
       <div style="font-family:'Bebas Neue',cursive;font-size:${i<3?'20':'16'}px;min-width:24px;text-align:center;color:${i===0?'var(--accent3)':i===1?'#aaa':i===2?'#cd7f32':'var(--muted)'};">${medal||i+1}</div>
       <div style="width:34px;height:34px;border-radius:50%;background:rgba(0,229,160,0.08);border:2px solid ${isMe?'var(--accent)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">${av}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:5px;">${p.username}${isMe?`<span style="font-size:9px;background:var(--accent);color:var(--bg);padding:2px 5px;border-radius:4px;font-weight:700;">YOU</span>`:''}</div>
+        <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:5px;">${p.displayName}${isMe?`<span style="font-size:9px;background:var(--accent);color:var(--bg);padding:2px 5px;border-radius:4px;font-weight:700;">YOU</span>`:''}</div>
         <div style="height:4px;background:var(--border);border-radius:2px;margin-top:5px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${i<3?'var(--accent)':'var(--muted)'};border-radius:2px;"></div></div>
       </div>
       <div style="text-align:right;flex-shrink:0;">
