@@ -343,7 +343,7 @@ input[type=number]{-moz-appearance:textfield;}
     </div>
     <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleDropdown()">
       <div id="home-signin-label"></div>
-      <div id="top-avatar-btn"></div>
+      <div id="top-avatar-btn" onclick="toggleDropdown()"></div>
     </div>
   </div>
   <div class="wrap" style="padding-top:4px;">
@@ -943,13 +943,7 @@ function renderAccountScreen(){
   const el=document.getElementById('acct-body');
   if(currentUser){
     // Fully registered user
-    el.innerHTML=`
-      <div style="display:flex;background:var(--surface);border-bottom:1px solid var(--border);margin:0 -16px 16px;">
-        <button class="tab-btn active" id="atab-me" onclick="switchAcctTab('me')" style="flex:1;padding:10px 4px;"><span class="tab-icon">👤</span>My Profile</button>
-        <button class="tab-btn" id="atab-global" onclick="switchAcctTab('global')" style="flex:1;padding:10px 4px;"><span class="tab-icon">🌍</span>Ranking</button>
-      </div>
-      <div id="acct-pane-me"></div>
-      <div id="acct-pane-global" style="display:none;"></div>`;
+    el.innerHTML=`<div id="acct-pane-me"></div>`;
     renderAcctMe();
   } else if(_pendingGoogleUser){
     // Google auth succeeded but no username set yet → username setup
@@ -1158,27 +1152,126 @@ function renderAcctMe(){
         <div style="font-size:11px;color:var(--muted);margin-top:6px;">You can change again in 14 days</div>
       </div>
     </div>
-    <div style="padding:0 16px 12px;">
-      <div style="background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:10px;padding:10px 14px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:4px;">Tournament Display Name</div>
-        <div style="font-size:14px;font-weight:600;">${u.displayName||u.username}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Enter this name exactly when joining tournaments to auto-link results</div>
-        <button onclick="showDisplayNameEdit()" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:50px;font-size:12px;font-weight:600;cursor:pointer;">✏️ Edit</button>
-        <div id="display-name-edit" style="display:none;margin-top:10px;">
-          <input id="new-display-inp" type="text" placeholder="e.g. Carlos" value="${u.displayName||''}"
-            style="width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;color:var(--text);font-size:15px;outline:none;margin-bottom:8px;"/>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary btn-sm" style="flex:1;" onclick="doDisplayNameChange()">Save</button>
-            <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="document.getElementById('display-name-edit').style.display='none'">Cancel</button>
-          </div>
+    <div style="padding:0 16px 16px;">
+      <!-- Tournament Display Name — compact inline row -->
+      <div style="display:flex;align-items:center;gap:10px;background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:10px;padding:9px 12px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:2px;">Tournament Name</div>
+          <div id="display-name-val" style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.displayName||u.username}</div>
+        </div>
+        <button onclick="showDisplayNameEdit()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">✏️ Edit</button>
+      </div>
+      <div id="display-name-edit" style="display:none;margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+        <input id="new-display-inp" type="text" placeholder="e.g. Carlos" value="${u.displayName||''}"
+          style="width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none;margin-bottom:8px;"/>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Use this exact name when joining tournaments to auto-link results.</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="doDisplayNameChange()">Save</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="document.getElementById('display-name-edit').style.display='none'">Cancel</button>
         </div>
       </div>
     </div>
-    <div style="padding:0 16px;">
-      <button class="btn btn-primary" onclick="viewMyProfile()">📊 Full Profile & History</button>
-    </div>`;
+    <div id="acct-profile-stats"><div style="padding:16px;text-align:center;"><div class="spinner" style="margin:20px auto;"></div></div></div>`;
+  // async: load and render profile stats + history below
+  loadAcctProfileStats();
 }
 
+async function loadAcctProfileStats(){
+  const el=document.getElementById('acct-profile-stats'); if(!el)return;
+  if(!currentUser)return;
+  const key=currentUser.uid||currentUser.username;
+  let player=null;
+  try{ player=await window._fbGet(`players/${key}`); }catch(e){}
+  if(!player||player.redirectTo){ try{ player=await fbLoadP(key); }catch(e){} }
+  if(!player){el.innerHTML='';return;}
+
+  let totalPts=player.legacy_points||0,totalWins=0,totalLosses=0,totalPlayed=0;
+  const history=player.tournaments||[];
+  history.forEach(th=>{totalPts+=th.points||0;totalWins+=th.wins||0;totalLosses+=th.losses||0;totalPlayed+=th.played||0;});
+  const winRate=totalPlayed>0?Math.round(totalWins/(totalWins+totalLosses||1)*100):0;
+  const avg=totalPlayed>0?(totalPts/totalPlayed).toFixed(1):0;
+
+  let histHTML='';
+  if(history.length){
+    const sorted=[...history].reverse();
+    sorted.forEach((th,idx)=>{
+      let dots='';
+      if(th.roundScores&&th.roundScores.length){
+        th.roundScores.forEach((sc,i)=>{
+          const c=roundColor(sc,th.ppg||24);
+          dots+=`<div class="round-dot" style="background:${c.bg};color:${c.color};flex:1;"><span class="rn">${i+1}</span>${sc===0?'BYE':sc}</div>`;
+        });
+      }
+      const rankStr=th.rank?`#${th.rank} of ${th.totalPlayers||'?'}`:'?';
+      const rankColor=th.rank===1?'var(--accent3)':th.rank===2?'#aaa':th.rank===3?'#cd7f32':'var(--muted)';
+      const rankMedal=th.rank===1?'🥇':th.rank===2?'🥈':th.rank===3?'🥉':'';
+      histHTML+=`
+        <div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="toggleHistEntry(${idx})">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${th.name||'Tournament'}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">${fmtDate(th.date)} · ${th.ppg||24}pts/game</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:26px;color:var(--accent);line-height:1;">${th.points}</div>
+              <div style="font-size:10px;color:var(--muted);">pts</div>
+            </div>
+            <div style="font-size:18px;flex-shrink:0;color:var(--muted);transition:transform 0.2s;" id="hist-chevron-${idx}">›</div>
+          </div>
+          <div id="hist-detail-delete-${idx}" style="display:none;margin-top:8px;">
+            <button onclick="removeHistoryEntry('${player.uid||player.username}','${th.code||idx}')" style="width:100%;padding:9px;background:rgba(255,92,92,0.08);border:1px solid rgba(255,92,92,0.25);border-radius:10px;color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🗑 Remove from my profile</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:10px;">
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:${rankColor};">${rankMedal||rankStr}</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Rank</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:var(--accent);">${th.wins}W</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Wins</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;color:var(--accent2);">${th.losses}L</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Losses</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:8px;padding:7px 6px;text-align:center;">
+              <div style="font-family:'Bebas Neue',cursive;font-size:18px;">${th.played}</div>
+              <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Matches</div>
+            </div>
+          </div>
+          <div id="hist-detail-${idx}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+            ${dots?`<div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Round Scores</div>
+            <div style="display:flex;gap:4px;margin-bottom:6px;">${dots}</div>`:''}
+            <div style="font-size:12px;color:var(--muted);">
+              Win rate: <strong style="color:var(--text);">${th.played?Math.round(th.wins/(th.wins+th.losses||1)*100):0}%</strong>
+              &nbsp;·&nbsp; Avg/match: <strong style="color:var(--text);">${th.played?(th.points/th.played).toFixed(1):0}</strong>
+              &nbsp;·&nbsp; Code: <strong style="color:var(--accent);letter-spacing:2px;">${th.code||'—'}</strong>
+            </div>
+          </div>
+        </div>`;
+    });
+    if(history.length>=10) histHTML+=`<div style="text-align:center;font-size:12px;color:var(--muted);padding:6px 0 4px;">Showing last 10 tournaments</div>`;
+  } else {
+    histHTML=`<div class="empty">${padelIcon()}No tournaments recorded yet.<br><span style="font-size:12px;">Finish a tournament to see it here!</span></div>`;
+  }
+
+  el.innerHTML=`
+    <div class="psg-grid" style="margin-top:4px;">
+      <div class="psg-cell gold"><span class="pv">${totalPts}</span><span class="pl">Total Pts</span></div>
+      <div class="psg-cell"><span class="pv">${totalWins}</span><span class="pl">Wins</span></div>
+      <div class="psg-cell warn"><span class="pv">${totalLosses}</span><span class="pl">Losses</span></div>
+    </div>
+    <div class="psg-grid" style="margin-bottom:16px;">
+      <div class="psg-cell"><span class="pv">${winRate}%</span><span class="pl">Win Rate</span></div>
+      <div class="psg-cell"><span class="pv">${avg}</span><span class="pl">Avg/Match</span></div>
+      <div class="psg-cell"><span class="pv">${history.length}</span><span class="pl">Tourneys</span></div>
+    </div>
+    <div style="padding:0 16px;">
+      <div class="sec">Tournament History</div>
+      ${histHTML}
+      ${player.legacy_points?`<div style="background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.2);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--accent3);margin-top:8px;">⭐ Includes ${player.legacy_points} legacy points</div>`:''}
+    </div>`;
+}
 
 function showDisplayNameEdit(){
   document.getElementById('display-name-edit').style.display='block';
@@ -2083,11 +2176,7 @@ function renderLbBody(allPlayers){
       </div>
     </div>`;
   });
-  html+=`</div><div class="lb-footer">
-    <div class="lb-footer-cell"><span class="fv">${rows.length}</span><span class="fl">Players</span></div>
-    <div class="lb-footer-cell"><span class="fv">${rows.reduce((a,r)=>a+r.count,0)}</span><span class="fl">Tourneys</span></div>
-    <div class="lb-footer-cell"><span class="fv">${rows.reduce((a,r)=>a+r.pts,0)}</span><span class="fl">Total Pts</span></div>
-  </div>`;
+  html+=`</div>`;
   bodyEl.innerHTML=html;
 }
 
